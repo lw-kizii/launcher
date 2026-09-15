@@ -88,23 +88,9 @@ set_target_properties(
         ${CMAKE_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libGlossHook.so
 )
 
-add_library(ffi STATIC IMPORTED)
-set_target_properties(
-        ffi
-        PROPERTIES IMPORTED_LOCATION
-        ${CMAKE_SOURCE_DIR}/third_party/libffi/${ANDROID_ABI}/lib/libffi.a
-)
-target_include_directories(${CMAKE_PROJECT_NAME}
-        PUBLIC ${CMAKE_SOURCE_DIR}/third_party/libffi/${ANDROID_ABI}/include
-)
-
 # Gloss, Android and LOGD marco
 target_link_libraries(${CMAKE_PROJECT_NAME}
         # List libraries link to the target library
-        GLESv3
-        EGL
-        z
         GlossHook
-        ffi
         android
         log)
