@@ -49,6 +49,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         # API
         api/mini/mini.c
         api/mini/mini_character.c
+        api/mini/charanimcontroller.c
 
         api/files/io.c
         api/files/PathParser.c
