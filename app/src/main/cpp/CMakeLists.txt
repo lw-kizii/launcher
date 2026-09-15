@@ -1,0 +1,109 @@
+# For more information about using CMake with Android Studio, read the
+# documentation: https://d.android.com/studio/projects/add-native-code.html.
+# For more examples on how to use CMake, see https://github.com/android/ndk-samples.
+cmake_minimum_required(VERSION 3.22.1)
+
+project("launcher")
+
+add_library(${CMAKE_PROJECT_NAME} SHARED
+        # List C/C++ source files with relative paths to this CMakeLists.txt.
+        # Core
+        core/crasher.c
+        core/hook.c
+        core/java.c
+        core/32patch.c
+        core/assets.c
+        core/saves.c
+        core/stdstring.c
+        core/jpatch.c
+        core/map.c
+        core/toml.c
+
+        # Hooks
+        hooks/Component/CharControllerComponent.c
+        hooks/Component/EntityComponent.c
+        hooks/PhysicsObjectState.c
+        hooks/Camera.c
+        hooks/CameraController.c
+        hooks/GameSceneController.c
+        hooks/GameViewController.c
+        hooks/PlayerProfile.c
+        hooks/SceneObject.c
+        hooks/Scene.c
+        hooks/CaverShell.c
+        hooks/ModelLibrary.c
+        hooks/TextureLibrary.c
+        hooks/RenderingContext.c
+        hooks/Program.c
+        hooks/Component.c
+        hooks/BindingValue.c
+
+
+        # Lua
+        lua/lua.c
+        lua/lauxlib.c
+        lua/ldblib.c
+        lua/lmathlib.c
+        lua/ltablelib.c
+
+        # API
+        api/mini/mini.c
+        api/mini/mini_character.c
+
+        api/files/io.c
+        api/files/PathParser.c
+        api/files/fs.c
+        api/files/os.c
+
+        api/overlay/button.c
+        api/overlay/drawer.c
+        api/overlay/hooks.c
+        api/overlay/legacy_bc.c
+        api/overlay/main.c
+        api/overlay/overlay.c
+        api/overlay/seekbar.c
+        api/overlay/textinput.c
+
+        api/main.c
+
+        # Entrypoint
+        main.c
+)
+
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/lua
+        ${CMAKE_CURRENT_SOURCE_DIR}/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs
+        ${CMAKE_CURRENT_SOURCE_DIR}/caver
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/api/files
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../GlossHook/GlossHook/include
+)
+
+add_library(GlossHook SHARED IMPORTED)
+set_target_properties(
+        GlossHook
+        PROPERTIES IMPORTED_LOCATION
+        ${CMAKE_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libGlossHook.so
+)
+
+add_library(ffi STATIC IMPORTED)
+set_target_properties(
+        ffi
+        PROPERTIES IMPORTED_LOCATION
+        ${CMAKE_SOURCE_DIR}/third_party/libffi/${ANDROID_ABI}/lib/libffi.a
+)
+target_include_directories(${CMAKE_PROJECT_NAME}
+        PUBLIC ${CMAKE_SOURCE_DIR}/third_party/libffi/${ANDROID_ABI}/include
+)
+
+# Gloss, Android and LOGD marco
+target_link_libraries(${CMAKE_PROJECT_NAME}
+        # List libraries link to the target library
+        GLESv3
+        EGL
+        z
+        GlossHook
+        ffi
+        android
+        log)

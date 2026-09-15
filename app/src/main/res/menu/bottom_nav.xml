@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_current"
+        android:icon="@drawable/ic_manage"
+        android:title="Current" />
+    <item
+        android:id="@+id/nav_mods"
+        android:icon="@drawable/ic_mods"
+        android:title="Mods" />
+    <item
+        android:id="@+id/nav_store"
+        android:icon="@drawable/ic_store"
+        android:title="Store" />
+    <item
+        android:id="@+id/nav_settings"
+        android:icon="@drawable/ic_settings"
+        android:title="Settings" />
+</menu>
