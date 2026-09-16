@@ -92,5 +92,6 @@ set_target_properties(
 target_link_libraries(${CMAKE_PROJECT_NAME}
         # List libraries link to the target library
         GlossHook
+        z
         android
         log)
