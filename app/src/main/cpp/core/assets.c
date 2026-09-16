@@ -14,6 +14,8 @@
 #include <errno.h>
 #include <jni.h>
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <zlib.h>
 
 #define LOG_TAG "LauncherAssets"
 
@@ -75,7 +77,9 @@ HOOK_SYMBOL(
 	FILE *f = fopen(respath, "rb");
 	if (!f) goto bailout;
 
-	// This function *does not* handle backgrounds/wav files
+	// This function is patched by NT!!
+	// This does not load backgrounds and wav files
+	// See `BinaryFile_Open` for background loading!
 
 //	fclose(f);
 //	String s;
@@ -98,6 +102,94 @@ HOOK_SYMBOL(
 	return orig_NewByteBufferFromAA(file, param_2);
 }
 
+static bool file_exists(const char *path) {
+	struct stat st;
+	return path && path[0] && stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+HOOK_SYMBOL(
+	BinaryFile_Open,
+	"_ZN5Caver10BinaryFile4OpenERKNSt6__ndk112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEENS0_4ModeEb",
+	uint, (void *this, String *filename, int mode, bool use_asset)
+) {
+	const char *name = String_get(filename);
+	const char *respath = java_resource_path(name);
+	if (file_exists(respath)) {
+		LOGD("Modded BinaryFile!! %s", respath);
+		int fd = open(respath, O_RDONLY);
+		if (fd < 0) return 0;
+		const char *m = (mode == 1) ? "wb" : "rb";
+		void *gz = gzdopen(fd, m);
+		if (!gz) { close(fd); return 0; }
+		*(int *)this = 2;
+		*(void **)(this + 8) = gz;
+		*(int *)(this + 0x10) = 0;
+		return 1;
+	}
+	return orig_BinaryFile_Open(this, filename, mode, use_asset);
+}
+
+HOOK_SYMBOL(
+	GetAudioFileData,
+	"_ZN5Caver16GetAudioFileDataERKNSt6__ndk112basic_stringIcNS0_11char_traitsIcEENS0_9allocatorIcEEEEPNS_11AudioBuffer12BufferFormatEPPvPiSE_",
+	bool, (String *path, int *fmt, void **data, int *size, int *rate)
+) {
+//	LOGD("AudioPath: %s", String_get(path));
+	const char *modded = java_resource_path(String_get(path));
+	if (!file_exists(modded)) return orig_GetAudioFileData(path, fmt, data, size, rate);
+
+	/* Modded WAV Logic! */
+	/* I need to replicate the function. */
+
+	// The modded sfx!
+	FILE *f = fopen(modded, "rb");
+	unsigned char hdr[0x2c]; // WAV header... 0x2c
+	if (fread(hdr, 1, 0x2c, f) != 0x2c) {
+		fclose(f);
+		return false;
+	}
+
+	/*
+	 bVar2 = (((iVar3 == 0x2c && local_94[0] == 0x46464952) && local_8c == 0x45564157) &&
+	 iStack_88 == 0x20746d66) && local_70 == 0x61746164;
+	 if ((((iVar3 == 0x2c && local_94[0] == 0x46464952) && local_8c == 0x45564157) &&
+	 iStack_88 == 0x20746d66) && local_70 == 0x61746164) {
+	 */
+	if (*(uint *)(hdr + 0) != 0x46464952 || *(uint *)(hdr + 8) != 0x45564157 || *(uint *)(hdr + 12) != 0x20746d66 || *(uint *)(hdr + 36) != 0x61746164) {
+		fclose(f);
+		return false;
+	}
+
+	uint datasz = *(uint *)(hdr + 40); // wav + 0x40 == sizeof raw PCM!! (Subchunk2Size)
+	void *buf = malloc(datasz);
+
+	// Edge case.
+	// No memory or the wav file was shorter
+	if (!buf || fread(buf, 1, datasz, f) != datasz) {
+		free(buf); // free our buffer!
+		fclose(f); // ...and close the file too.
+		return false; // no valid data.
+	}
+	fclose(f);
+
+	short ch = *(short *)(hdr + 22); // 22: NumChannels | Mono = 1, Stereo = 2, etc.
+	short bits = *(short *)(hdr + 34); // 34: BitsPerSample | 8 bits = 8, 16 bits = 16, etc.
+	int sr = *(int *)(hdr + 24); // 24: SampleRate | 8000, 44100, etc.
+
+	int bf = 0; // default to an invalid format!!
+	if (bits == 16) bf = (ch == 1) ? 2 : 4;
+	if (bits == 8) bf = (ch == 1) ? 1 : 3;
+	// 1 = 8 bit mono, 2 = 16 bit mono
+	// 3 = 8 bit stereo, 4 = 16 bit stereo
+
+	*fmt = bf; // BufferFormat that the audio system expects
+	*data = buf; // Pointer to Audio Data
+	*size = (int)datasz; // Size of Audio Data
+	*rate = sr; // Sample Rate for OpenAL
+	LOGD("Modded SFX: %s", modded);
+	return true; // success ^^
+}
+
 static int is_save_path(const char *p) {
 	return p && strstr(p, ".gplayer");
 }
@@ -111,7 +203,7 @@ static void redirect_path(String *out, const char *orig) {
 	const char *base = path_basename(orig);
 	char full[512];
 	snprintf(full, sizeof(full), "%s%s", java_resource_path("saves/"), base);
-	LOGD("redirect %s -> %s", orig, full);
+//	LOGD("redirect %s -> %s", orig, full);
 	String_create(out, full);
 }
 
