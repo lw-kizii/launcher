@@ -66,7 +66,7 @@ public class MainActivity extends FragmentActivity {
 	public static String getTargetApkPath() { return instance != null ? instance.targetApkPath : null; }
 
 	public static native void init();
-	public static native void initPaths(String internalFiles, String externalFiles);
+	public static native void initPaths(String internalFiles, String internalCache, String externalFiles);
 	public static native void loadHooks();
 	public static native void onModExit();
 	public static native void setCrashLogPath(String path);
@@ -129,7 +129,7 @@ public class MainActivity extends FragmentActivity {
 			System.load(swordigoFile.getAbsolutePath());
 			swordigoReady = true;
 			File ext = getExternalFilesDir(null);
-			initPaths(getFilesDir().getAbsolutePath(), ext != null ? ext.getAbsolutePath() : "");
+			initPaths(getFilesDir().getAbsolutePath(), getCacheDir().getAbsolutePath(), ext != null ? ext.getAbsolutePath() : "");
 			init();
 		} catch (Exception e) {
 			Log.e(TAG, "prepareSwordigo failed", e);

@@ -4,13 +4,14 @@
 #include <string.h>
 #include "log.h"
 
-#define LOG_TAG "LawncherJava"
+#define LOG_TAG "LauncherJava"
 
 static JavaVM *g_vm = NULL;
 static jclass g_mainActivityClass = NULL;
 static jmethodID g_currentModMethod = NULL;
 
 static char g_internalfiles[256] = {0};
+static char g_internalcache[256] = {0};
 static char g_externalfiles[256] = {0};
 
 static char g_current_mod[128] = {0};
@@ -47,6 +48,10 @@ void java_release_env(int attached) {
 
 const char *java_internal_files(void) {
 	return g_internalfiles;
+}
+
+const char *java_internal_cache(void) {
+	return g_internalcache;
 }
 
 const char *java_external_files(void) {
@@ -94,8 +99,8 @@ const char *java_resource_path(const char *res) {
 	const char *id = java_current_mod_id();
 	static char buf[512];
 	snprintf(buf, sizeof(buf),
-	         "%s/mods/%s/%s",
-	         g_externalfiles, id, res);
+			 "%s/mods/%s/%s",
+			 g_externalfiles, id, res);
 	return buf;
 }
 
@@ -109,31 +114,29 @@ void java_set_main_activity(jclass clazz, jmethodID current_mod_method) {
 	g_currentModMethod = current_mod_method;
 }
 
+// Helper!
+void copyjstring(JNIEnv *env, jstring src, char *dst) {
+	if (src) {
+		const char *p = (*env)->GetStringUTFChars(env, src, NULL);
+		if (p) {
+			snprintf(dst, 256, "%s", p);
+			(*env)->ReleaseStringUTFChars(env, src, p);
+		}
+	}
+}
+
 JNIEXPORT void JNICALL
 Java_net_kiwi_launcher_MainActivity_initPaths(JNIEnv *env, jclass clazz,
-                                              jstring internalFiles, jstring externalFiles)
+											  jstring internalFiles, jstring internalCache, jstring externalFiles)
 {
-	if (internalFiles) {
-		const char *p = (*env)->GetStringUTFChars(env, internalFiles, NULL);
-		if (p) {
-			snprintf(g_internalfiles, sizeof(g_internalfiles), "%s", p);
-			(*env)->ReleaseStringUTFChars(env, internalFiles, p);
-		}
-	}
-
-	if (externalFiles) {
-		const char *p = (*env)->GetStringUTFChars(env, externalFiles, NULL);
-		if (p) {
-			snprintf(g_externalfiles, sizeof(g_externalfiles), "%s", p);
-			(*env)->ReleaseStringUTFChars(env, externalFiles, p);
-		}
-	}
+	copyjstring(env, internalFiles, g_internalfiles);
+	copyjstring(env, externalFiles, g_externalfiles);
+	copyjstring(env, internalCache, g_internalcache);
 
 	(*env)->GetJavaVM(env, &g_vm);
 
 	jclass global = (jclass)(*env)->NewGlobalRef(env, clazz);
-	jmethodID method = (*env)->GetStaticMethodID(
-		env, global, "currentMod", "()Ljava/lang/String;");
+	jmethodID method = (*env)->GetStaticMethodID(env, global, "currentMod", "()Ljava/lang/String;");
 
 	if (!method) {
 		LOGE("MainActivity.currentMod() not found");
@@ -142,5 +145,5 @@ Java_net_kiwi_launcher_MainActivity_initPaths(JNIEnv *env, jclass clazz,
 
 	java_set_main_activity(global, method);
 
-	LOGI("paths: internal=%s external=%s", g_internalfiles, g_externalfiles);
+	LOGI("--- Paths ---\n internal=%s\n internalcache=%s\n external=%s\n--- ..... ---", g_internalfiles, g_internalcache, g_externalfiles);
 }

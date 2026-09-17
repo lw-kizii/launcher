@@ -12,6 +12,7 @@ JNIEnv *java_get_env(int *out_attached);
 void java_release_env(int attached);
 
 const char *java_internal_files(void);
+const char *java_internal_cache(void);
 const char *java_external_files(void);
 const char *java_current_mod_id(void);
 const char *java_resource_path(const char *res);

@@ -19,11 +19,6 @@
 
 #define LOG_TAG "LauncherAssets"
 
-// This is way better!
-#define MOD_LIB_CAP 16
-static void *g_mod_handles[MOD_LIB_CAP];
-static int g_mod_handle_count = 0;
-
 static const char *path_basename(const char *path) {
 	const char *slash = strrchr(path, '/');
 	return slash ? slash + 1 : path;
@@ -235,12 +230,45 @@ HOOK_SYMBOL(
 	return orig_FileExistsAtPath(path);
 }
 
+// Library loading logic!!!
+
+// This is way better!
+#define MOD_LIB_CAP 16
+static void *g_mod_handles[MOD_LIB_CAP];
+static char g_mod_lib_paths[MOD_LIB_CAP][1024];
+static int g_mod_handle_count = 0;
+typedef void (*unload_mod_fn)(void);
+
+static int has_so_ext(const char *name) {
+	size_t len = strlen(name);
+	return len >= 4 && strcmp(name + len - 3, ".so") == 0;
+}
+
+static void *loadlib(const char *libdir, const char *name) {
+	const char *cachedir = java_internal_cache();
+
+	// String buffer...
+	char src[1024], dst[1024];
+	snprintf(src, sizeof(src), "%s/%s", libdir, name);
+	snprintf(dst, sizeof(dst), "%s/%s", cachedir, name);
+
+	if (!copy_file(src, dst)) return NULL;
+
+	void *h = dlopen(dst, RTLD_NOW | RTLD_GLOBAL);
+	if (!h) {
+		LOGE("loadlib: dlopen failed %s: %s", dst, dlerror());
+		remove(dst);
+		return NULL;
+	}
+	snprintf(g_mod_lib_paths[g_mod_handle_count], sizeof(g_mod_lib_paths[0]), "%s", dst);
+	return h;
+}
 
 void load_mod_libraries(void) {
-	unload_mod_libraries(); // unload previous libraries if any!
+	unload_mod_libraries();
 
 	const char *id = java_current_mod_id();
-	if (!id || !id[0]) return; // just in case...
+	if (!id || !id[0]) return;
 
 	const char *ext = java_external_files();
 	if (!ext || !ext[0]) {
@@ -259,28 +287,18 @@ void load_mod_libraries(void) {
 
 	struct dirent *ent;
 	while ((ent = readdir(d)) != NULL) {
-		const char *name = ent->d_name;
-		size_t len = strlen(name);
-		if (len < 4 || strcmp(name + len - 3, ".so") != 0) continue;
-		if (name[0] == '.') continue;
-
-		char path[768];
-		snprintf(path, sizeof(path), "%s/%s", libdir, name);
-
-		void *h = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
-		if (!h) {
-			LOGE("load_mod_libraries: dlopen failed %s: %s", path, dlerror());
-			continue;
-		}
+		if (ent->d_name[0] == '.' || !has_so_ext(ent->d_name)) continue;
 
 		if (g_mod_handle_count >= MOD_LIB_CAP) {
-			LOGE("load_mod_libraries: handle cap reached, skipping %s", name);
-			dlclose(h);
+			LOGE("load_mod_libraries: handle cap reached, skipping %s", ent->d_name);
 			continue;
 		}
 
+		void *h = loadlib(libdir, ent->d_name);
+		if (!h) continue;
+
 		g_mod_handles[g_mod_handle_count++] = h;
-		LOGI("load_mod_libraries: loaded %s", path);
+		LOGI("load_mod_libraries: loaded %s", ent->d_name);
 	}
 	closedir(d);
 
@@ -290,8 +308,16 @@ void load_mod_libraries(void) {
 void unload_mod_libraries(void) {
 	for (int i = g_mod_handle_count - 1; i >= 0; i--) {
 		if (g_mod_handles[i]) {
+
+			unload_mod_fn fn = (unload_mod_fn)dlsym(g_mod_handles[i], "unload_mod");
+			if (fn) fn(); else LOGD("");
+
 			dlclose(g_mod_handles[i]);
 			g_mod_handles[i] = NULL;
+		}
+		if (g_mod_lib_paths[i][0]) {
+			remove(g_mod_lib_paths[i]);
+			g_mod_lib_paths[i][0] = '\0';
 		}
 	}
 	g_mod_handle_count = 0;
