@@ -67,7 +67,7 @@ HOOK_SYMBOL(
 	NewByteBufferFromAA,
 	"_ZN5Caver29NewByteBufferFromAndroidAssetERKNSt6__ndk112basic_stringIcNS0_11char_traitsIcEENS0_9allocatorIcEEEEPj",
 	void*, (String *file, uint *param_2)
-	) {
+) {
 	const char *respath = java_resource_path(String_get(file));
 	FILE *f = fopen(respath, "rb");
 	if (!f) goto bailout;
@@ -285,6 +285,7 @@ void load_mod_libraries(void) {
 		return;
 	}
 
+	hook_begin_mod_capture();
 	struct dirent *ent;
 	while ((ent = readdir(d)) != NULL) {
 		if (ent->d_name[0] == '.' || !has_so_ext(ent->d_name)) continue;
@@ -297,10 +298,15 @@ void load_mod_libraries(void) {
 		void *h = loadlib(libdir, ent->d_name);
 		if (!h) continue;
 
+		typedef void (*mod_init_fn)(void);
+		mod_init_fn init = (mod_init_fn)dlsym(h, "mod_init");
+		if (init) init();
+
 		g_mod_handles[g_mod_handle_count++] = h;
 		LOGI("load_mod_libraries: loaded %s", ent->d_name);
 	}
 	closedir(d);
+	hook_end_mod_capture();
 
 	LOGI("load_mod_libraries: %d library(ies) for mod '%s'", g_mod_handle_count, id);
 }
@@ -308,10 +314,13 @@ void load_mod_libraries(void) {
 void unload_mod_libraries(void) {
 	for (int i = g_mod_handle_count - 1; i >= 0; i--) {
 		if (g_mod_handles[i]) {
-
 			unload_mod_fn fn = (unload_mod_fn)dlsym(g_mod_handles[i], "unload_mod");
 			if (fn) fn(); else LOGD("");
-
+		}
+	}
+	hook_delete_mod_hooks();
+	for (int i = g_mod_handle_count - 1; i >= 0; i--) {
+		if (g_mod_handles[i]) {
 			dlclose(g_mod_handles[i]);
 			g_mod_handles[i] = NULL;
 		}

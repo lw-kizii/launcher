@@ -24,13 +24,28 @@
 #define $(type, base, off32, off64) \
 	((type *)((uintptr_t)(base) + OFFSET(off32, off64)))
 
+typedef void (*hook_installer_t)(void);
+typedef void (*dl_resolver_t)(void);
+
+#define HOOK_INSTALLER_CAP 512
+#define DL_RESOLVER_CAP 512
+
+extern hook_installer_t g_hook_installers[HOOK_INSTALLER_CAP];
+extern int g_hook_installer_count;
+extern dl_resolver_t g_dl_resolvers[DL_RESOLVER_CAP];
+extern int g_dl_resolver_count;
+
+void hook_register_installer(hook_installer_t fn);
+void dl_register_resolver(dl_resolver_t fn);
+void dl_resolve_all(void);
+
 // Static hook symbol
 #define HOOK_SYMBOL(name, symbol_str, ret, args) \
 	typedef ret (*name##_t) args; \
 	static name##_t orig_##name = NULL; \
 	static ret hook_##name args; \
-	__attribute__((constructor)) \
-	static void register_##name(void) { \
+	static void install_##name(void) { \
+		if (orig_##name) return; \
 		GlossInit(true); \
 		GlossHookByName( \
 			HOOK_LIB_NAME, \
@@ -40,14 +55,19 @@
 			NULL \
 		); \
 	} \
+	__attribute__((constructor)) \
+	static void register_##name(void) { \
+		hook_register_installer(install_##name); \
+	} \
 	static ret hook_##name args
 
-// Offset hooks. Need to be registered!
+// Offset hooks.
 #define HOOK_OFFSET(name, off32, off64, ret, args) \
 	typedef ret (*name##_t) args; \
 	static name##_t orig_##name = NULL; \
 	static ret hook_##name args; \
-	static void register_##name(void) { \
+	static void install_##name(void) { \
+		if (orig_##name) return; \
 		GlossInit(true); \
 		GlossHookAddrByName( \
 			HOOK_LIB_NAME, \
@@ -59,19 +79,13 @@
 			NULL \
 		); \
 	} \
+	__attribute__((constructor)) \
+	static void register_##name(void) { \
+		hook_register_installer(install_##name); \
+	} \
 	static ret hook_##name args
 
 // init_hooks calls this.
-typedef void (*dl_resolver_t)(void);
-
-#define DL_RESOLVER_CAP 512
-
-extern dl_resolver_t g_dl_resolvers[DL_RESOLVER_CAP];
-extern int g_dl_resolver_count;
-
-void dl_register_resolver(dl_resolver_t fn);
-void dl_resolve_all(void);
-
 // Static DL_SYMBOL
 #define DL_SYMBOL(name, symbol_str, ret, args) \
 	typedef ret (*name##_t) args; \
@@ -114,8 +128,13 @@ uintptr_t get_lib_text(size_t *size);
 // dlsym from libswordigo...
 void *swordigo_dlsym(const char *symbol);
 
-
 void init_hooks(void);
+
+// Capture every Gloss hook installed while loading mod .so files!!
+// so they can be deleted on unload... otherwise they stick in libswordigo :(.
+void hook_begin_mod_capture(void);
+void hook_end_mod_capture(void);
+void hook_delete_mod_hooks(void);
 
 void load_mod_libraries(void);
 void unload_mod_libraries(void);

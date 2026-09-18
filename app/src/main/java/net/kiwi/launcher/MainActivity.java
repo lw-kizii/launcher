@@ -49,7 +49,7 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends FragmentActivity {
 
 	private static final String TAG = "Launcher";
-	private static final int Version = 80;
+	private static final int Version = 81;
 
 	private static MainActivity instance;
 	private GameView glSurfaceView;
@@ -64,13 +64,23 @@ public class MainActivity extends FragmentActivity {
 	public static Activity getCurrentActivity() { return instance; }
 	public static String currentMod() { return Launcher.currentMod(); }
 	public static String getTargetApkPath() { return instance != null ? instance.targetApkPath : null; }
-
+	
+	
+	// Native Methods!
+	
+	// main.c
 	public static native void init();
+	// java.c
 	public static native void initPaths(String internalFiles, String internalCache, String externalFiles);
+	
+	// main.c, used to load hooks!
 	public static native void loadHooks();
+	// main.c, used to unload assets, hooks, etc.
 	public static native void onModExit();
+	// crasher.c, for the native crash catcher ^^
 	public static native void setCrashLogPath(String path);
 
+	//! Get the primary abi
 	public static String getAbi() {
 		if (android.os.Build.SUPPORTED_ABIS.length > 0) {
 			String primary = android.os.Build.SUPPORTED_ABIS[0];
@@ -78,7 +88,8 @@ public class MainActivity extends FragmentActivity {
 		}
 		return "armeabi-v7a";
 	}
-
+	
+	// Get the extracted path of the libraries
 	public static File getExtractedPath() {
 		MainActivity act = instance;
 		if (act == null) return null;
@@ -94,6 +105,7 @@ public class MainActivity extends FragmentActivity {
 		getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
 		instance = this;
 
+		// There'll be a use for this.
 		File extDir = getExternalFilesDir(null);
 		if (extDir != null) {
 			File resourcesDir = new File(extDir, "resources");
@@ -102,14 +114,20 @@ public class MainActivity extends FragmentActivity {
 			}
 		}
 
+		// Load the launcher library.
 		System.loadLibrary("launcher");
+		// crash log path!
 		try {
 			setCrashLogPath(new File(getFilesDir(), "last_crash.log").getAbsolutePath());
 		} catch (Throwable ignored) {}
 
+		// UI, Previous Crash
 		showLauncherUi();
 		checkPreviousCrash();
+		
 		prepareSwordigo();
+		
+		// Launcher updates
 		checkForUpdate();
 	}
 
@@ -125,8 +143,6 @@ public class MainActivity extends FragmentActivity {
 			targetApkPaths = collectApkPaths(info);
 			extractLibFromZip(targetApkPaths, "lib/" + abi + "/libopenal-soft.so", openAlFile);
 			extractLibFromZip(targetApkPaths, "lib/" + abi + "/libswordigo.so", swordigoFile);
-			System.load(openAlFile.getAbsolutePath());
-			System.load(swordigoFile.getAbsolutePath());
 			swordigoReady = true;
 			File ext = getExternalFilesDir(null);
 			initPaths(getFilesDir().getAbsolutePath(), getCacheDir().getAbsolutePath(), ext != null ? ext.getAbsolutePath() : "");
@@ -158,6 +174,7 @@ public class MainActivity extends FragmentActivity {
 			public int getItemCount() { return 4; }
 		});
 
+		// Keep in sync!
 		binding.bottomNav.setOnItemSelectedListener(item -> {
 			int id = item.getItemId();
 			if (id == R.id.nav_current) { binding.pager.setCurrentItem(0, true); return true; }
@@ -182,6 +199,9 @@ public class MainActivity extends FragmentActivity {
 		}
 	}
 
+	// APK Paths collector
+	// Takes in ApplicationInfo and returns paths
+	// I should probably move this to Util
 	private static String[] collectApkPaths(ApplicationInfo info) {
 		if (info.splitSourceDirs == null || info.splitSourceDirs.length == 0)
 			return new String[]{info.sourceDir};
@@ -191,15 +211,15 @@ public class MainActivity extends FragmentActivity {
 		return paths;
 	}
 
+	// Previous crash check!
+	// TODO: Add exporting of crash log
 	private void checkPreviousCrash() {
 		File crashLog = new File(getFilesDir(), "last_crash.log");
 		if (!crashLog.exists() || crashLog.length() == 0) return;
+		//noinspection ResultOfMethodCallIgnored
 		Util.alert(this, "Oops, the launcher crashed.",
 			"A previous session ended with a native crash.",
-			"Dismiss", () -> {
-				//noinspection ResultOfMethodCallIgnored
-				crashLog.delete();
-			});
+			"Dismiss", crashLog::delete);
 	}
 
 	private void showErrorDialog(Exception e) {
@@ -218,41 +238,59 @@ public class MainActivity extends FragmentActivity {
 		Util.alert(this, "Swordigo Initialization Failed", message, "Got it", null);
 	}
 
-
-	public static void launch() {
-		if (instance == null) return;
-		if (!instance.swordigoReady || instance.targetApkPath == null) {
-			instance.runOnUiThread(() ->
-				Toast.makeText(instance, "Swordigo is not installed — can't launch.", Toast.LENGTH_LONG).show());
-			return;
-		}
-		instance.startGame();
-	}
-
+	@SuppressLint("UnsafeDynamicallyLoadedCode")
 	private void startGame() {
 		if (targetApkPath == null) return;
+		
+		// library dir.
+		File libDir = getExtractedPath();
+		
+		// Load the libraries nicely...
+		System.load(new File(libDir, "libopenal-soft.so").getAbsolutePath());
+		System.load(new File(libDir, "libswordigo.so").getAbsolutePath());
 		loadHooks();
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
 		FrameLayout gameRoot = new FrameLayout(this);
-		gameRoot.setLayoutParams(new ViewGroup.LayoutParams(
-			ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+		gameRoot.setLayoutParams(
+			new ViewGroup.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT,
+					ViewGroup.LayoutParams.MATCH_PARENT
+				)
+		);
 
 		glSurfaceView = new GameView(this);
 		glSurfaceView.setEGLConfigChooser(5, 6, 5, 0, 16, 0);
 		glSurfaceView.setPreserveEGLContextOnPause(true);
 		glSurfaceView.setRenderer(new GameRenderer());
-		gameRoot.addView(glSurfaceView, new FrameLayout.LayoutParams(
-			ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+		gameRoot.addView(glSurfaceView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
 		setContentView(gameRoot);
-		enableImmersiveMode();
+		enableImmersiveMode(); /* hide navigation ui/other stuff */
+		
+		// Initialize the ButtonController library over gameRoot :)
 		ButtonController.init(this, gameRoot);
+
+		// Native Environment Setup
 		setupNativeEnvironment(targetApkPath);
+		
+		// gearButton (for closing the mod)
 		Launcher.initGameButtons(this);
 		hooksLoaded = true;
 	}
 
+	public static void launch() {
+		if (instance == null) return;
+
+		if (!instance.swordigoReady || instance.targetApkPath == null) {
+			instance.runOnUiThread(() -> Toast.makeText(instance, "Swordigo is not installed! Can't launch.", Toast.LENGTH_LONG).show());
+			return;
+		}
+
+		instance.startGame();
+	}
+
+	// Call native onModExit to clean up after a mod
 	private void unloadGameHooks() {
 		if (!hooksLoaded) return;
 		try { onModExit(); } catch (Throwable t) {
@@ -268,14 +306,15 @@ public class MainActivity extends FragmentActivity {
 
 	@SuppressLint("SourceLockedOrientationActivity")
 	private void stopGame() {
-		unloadGameHooks();
-		Port.onGameStop();
+		unloadGameHooks(); // unload game hooks (cleanup)
+		Port.onGameStop(); // music stuff for now
 		if (glSurfaceView != null) glSurfaceView.onPause();
-		Launcher.destroyGameButtons();
+		Launcher.destroyGameButtons(); // destroy gear button
 		glSurfaceView = null;
-		ButtonController.removeAll();
-		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-		showLauncherUi();
+		ButtonController.removeAll(); // remove buttons
+		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT); // jump to portrait mode
+
+		showLauncherUi(); // show the launcher ui again
 	}
 
 	@Keep
@@ -283,7 +322,7 @@ public class MainActivity extends FragmentActivity {
 	public static AssetManager getGameAssetManager() {
 		if (gameAssetManager != null) return gameAssetManager;
 		String apk = getTargetApkPath();
-		if (apk == null || instance == null) return null;
+		if (apk == null) return null;
 		AssetManager am = buildAssetManager(apk);
 		if (am != null) gameAssetManager = am;
 		return am;
@@ -306,7 +345,7 @@ public class MainActivity extends FragmentActivity {
 		}
 	}
 
-	@SuppressWarnings({"deprecation", "JavaReflectionMemberAccess"})
+	@SuppressWarnings({"JavaReflectionMemberAccess"})
 	private static AssetManager buildAssetManager(String apkPath) {
 		try {
 			AssetManager am = AssetManager.class.getDeclaredConstructor().newInstance();
@@ -407,7 +446,7 @@ public class MainActivity extends FragmentActivity {
 				String notes = o.optString("notes", "A new version is available.");
 				String url = o.optString("directUrl", o.optString("url", ""));
 				runOnUiThread(() -> Util.alert(this, "Update available", notes, "OK", () -> {
-					if (url == null || url.isEmpty()) return;
+					if (url.isEmpty()) return;
 					try {
 						startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
 					} catch (Exception ignored) {}
