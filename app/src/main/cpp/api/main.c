@@ -5,6 +5,9 @@
 #include "log.h"
 #include "overlay/main.h"
 
+// lua libs
+#include "lualib.h"
+
 #define LOG_TAG "ProgramState"
 
 extern void API_register_mini(lua_State *L);
@@ -19,6 +22,11 @@ HOOK_SYMBOL(
 ) {
 	orig_RegisterProgramLibrary(this);
 	lua_State *L = this->L;
+
+	// Lua libs first.
+	luaopen_table(L);
+	luaopen_math(L);
+	luaopen_debug(L);
 
 	API_register_java_stuff(L);
 	API_register_mini(L);
