@@ -14,6 +14,8 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import com.touchfoo.swordigo.Native;
 
+import net.kiwi.launcher.SettingsFragment;
+
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
@@ -59,8 +61,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     @Override
     public void onDrawFrame(GL10 gl) {
         try {
-            Activity activity = (Activity) Native.mainActivity;
-            int targetFps = 60;
+	        int targetFps = SettingsFragment.getFps();
             double targetFrameTime = 1.0 / targetFps;
 
             double now = System.nanoTime() / 1_000_000_000.0;
