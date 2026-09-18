@@ -277,13 +277,18 @@ void load_mod_libraries(void) {
 	}
 
 	char libdir[512];
-	snprintf(libdir, sizeof(libdir), "%s/mods/%s/libraries", ext, id);
-
+	const char *abi = archSplit("armeabi-v7a", "arm64-v8a");
+	snprintf(libdir, sizeof(libdir), "%s/mods/%s/libraries/%s", ext, id, abi);
 	DIR *d = opendir(libdir);
+	if (!d) {
+		snprintf(libdir, sizeof(libdir), "%s/mods/%s/libraries", ext, id);
+		d = opendir(libdir);
+	}
 	if (!d) {
 		LOGI("load_mod_libraries: no libraries dir for mod '%s'", id);
 		return;
 	}
+	LOGI("load_mod_libraries: using %s", libdir);
 
 	hook_begin_mod_capture();
 	struct dirent *ent;
