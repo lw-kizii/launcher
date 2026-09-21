@@ -16,6 +16,8 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <zlib.h>
+#include <setjmp.h>
+#include <signal.h>
 
 #define LOG_TAG "LauncherAssets"
 
@@ -35,6 +37,30 @@ static void ensure_dir(const char *path) {
 		}
 	}
 	mkdir(buf, 0770);
+}
+
+// A function used to fetch assets!
+// Order: .../net.kiwi.launcher/files/:
+// 1. /resources/
+// 2. /mods/<mod>/resources/
+// 3. AssetManager (Vanilla Assets)
+FILE *fetch_asset(String *asset) {
+	const char *name = String_get(asset);
+	if (!name || !name[0]) return NULL;
+
+	const char *ext = java_external_files();
+	if (ext && ext[0]) {
+		char global[512];
+		snprintf(global, sizeof(global), "%s/%s", ext, name);
+		FILE *f = fopen(global, "rb");
+		if (f) return f;
+	}
+
+	const char *modpath = java_resource_path(name);
+	FILE *f = fopen(modpath, "rb");
+	if (f) return f;
+
+	return NULL;
 }
 
 static int copy_file(const char *src, const char *dst) {
@@ -68,28 +94,19 @@ HOOK_SYMBOL(
 	"_ZN5Caver29NewByteBufferFromAndroidAssetERKNSt6__ndk112basic_stringIcNS0_11char_traitsIcEENS0_9allocatorIcEEEEPj",
 	void*, (String *file, uint *param_2)
 ) {
-	const char *respath = java_resource_path(String_get(file));
-	FILE *f = fopen(respath, "rb");
+	/* scl, scene, pvr and pod */
+	FILE *f = fetch_asset(file);
 	if (!f) goto bailout;
 
-	// This function is patched by NT!!
-	// This does not load backgrounds and wav files
-	// See `BinaryFile_Open` for background loading!
-
-//	fclose(f);
-//	String s;
-//	String_create(&s, respath);
-//	return orig_NewByteBufferFromAA(&s, param_2);
 	fseek(f, 0, SEEK_END);
-	size_t size = ftell(f);
+	long size = ftell(f);
 	fseek(f, 0, SEEK_SET);
 	if (size < 0) goto bailout;
-	void *buf = malloc(size);
+	void *buf = malloc((size_t)size);
 	if (!buf) goto bailout;
-	size_t readbytes = fread(buf, 1, size, f);
-	fclose(f); // ty kizi for the warning
-	*param_2 = (uint)readbytes; // param2 is outbytes
-	LOGD("Modded Asset %s", respath);
+	size_t readbytes = fread(buf, 1, (size_t)size, f);
+	fclose(f);
+	*param_2 = (uint)readbytes;
 	return buf;
 
 	bailout:
@@ -107,21 +124,18 @@ HOOK_SYMBOL(
 	"_ZN5Caver10BinaryFile4OpenERKNSt6__ndk112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEENS0_4ModeEb",
 	uint, (void *this, String *filename, int mode, bool use_asset)
 ) {
-	const char *name = String_get(filename);
-	const char *respath = java_resource_path(name);
-	if (file_exists(respath)) {
-		LOGD("Modded BinaryFile!! %s", respath);
-		int fd = open(respath, O_RDONLY);
-		if (fd < 0) return 0;
-		const char *m = (mode == 1) ? "wb" : "rb";
-		void *gz = gzdopen(fd, m);
-		if (!gz) { close(fd); return 0; }
-		*(int *)this = 2;
-		*(void **)(this + 8) = gz;
-		*(int *)(this + 0x10) = 0;
-		return 1;
-	}
-	return orig_BinaryFile_Open(this, filename, mode, use_asset);
+	FILE *f = fetch_asset(filename);
+	if (!f) return orig_BinaryFile_Open(this, filename, mode, use_asset);
+	int fd = dup(fileno(f)); // Don't kill the gzdopen!
+	fclose(f);
+	if (fd < 0) return 0;
+	const char *m = (mode == 1) ? "wb" : "rb";
+	void *gz = gzdopen(fd, m);
+	if (!gz) { close(fd); return 0; }
+	*(int *)this = 2;
+	*(void **)(this + 8) = gz;
+	*(int *)(this + 0x10) = 0;
+	return 1;
 }
 
 HOOK_SYMBOL(
@@ -129,15 +143,8 @@ HOOK_SYMBOL(
 	"_ZN5Caver16GetAudioFileDataERKNSt6__ndk112basic_stringIcNS0_11char_traitsIcEENS0_9allocatorIcEEEEPNS_11AudioBuffer12BufferFormatEPPvPiSE_",
 	bool, (String *path, int *fmt, void **data, int *size, int *rate)
 ) {
-//	LOGD("AudioPath: %s", String_get(path));
-	const char *modded = java_resource_path(String_get(path));
-	if (!file_exists(modded)) return orig_GetAudioFileData(path, fmt, data, size, rate);
-
-	/* Modded WAV Logic! */
-	/* I need to replicate the function. */
-
-	// The modded sfx!
-	FILE *f = fopen(modded, "rb");
+	FILE *f = fetch_asset(path);
+	if (!f) return orig_GetAudioFileData(path, fmt, data, size, rate);
 	unsigned char hdr[0x2c]; // WAV header... 0x2c
 	if (fread(hdr, 1, 0x2c, f) != 0x2c) {
 		fclose(f);
@@ -181,7 +188,7 @@ HOOK_SYMBOL(
 	*data = buf; // Pointer to Audio Data
 	*size = (int)datasz; // Size of Audio Data
 	*rate = sr; // Sample Rate for OpenAL
-	LOGD("Modded SFX: %s", modded);
+
 	return true; // success ^^
 }
 
@@ -209,7 +216,6 @@ HOOK_SYMBOL(
 ) {
 	const char *p = String_get(path);
 	if (!p || !p[0]) return orig_FileExistsAtPath(path);
-
 	if (is_save_path(p)) {
 		String s;
 		redirect_path(&s, p);
@@ -217,16 +223,10 @@ HOOK_SYMBOL(
 		String_destroy(&s);
 		return ret;
 	}
-
 	if (p[0] != '/') {
-		const char *id = java_current_mod_id();
-		if (id && id[0]) {
-			const char *respath = java_resource_path(p);
-			struct stat st;
-			if (respath && respath[0] && stat(respath, &st) == 0 && S_ISREG(st.st_mode)) return true;
-		}
+		FILE *f = fetch_asset(path);
+		if (f) { fclose(f); return true; }
 	}
-
 	return orig_FileExistsAtPath(path);
 }
 
@@ -316,13 +316,23 @@ void load_mod_libraries(void) {
 	LOGI("load_mod_libraries: %d library(ies) for mod '%s'", g_mod_handle_count, id);
 }
 
-void unload_mod_libraries(void) {
-	for (int i = g_mod_handle_count - 1; i >= 0; i--) {
-		if (g_mod_handles[i]) {
-			unload_mod_fn fn = (unload_mod_fn)dlsym(g_mod_handles[i], "unload_mod");
-			if (fn) fn(); else LOGD("");
-		}
+static void clear_cache_sos(void) {
+	const char *cachedir = java_internal_cache();
+	if (!cachedir || !cachedir[0]) return;
+	DIR *d = opendir(cachedir);
+	if (!d) return;
+	struct dirent *ent;
+	while ((ent = readdir(d)) != NULL) {
+		if (ent->d_name[0] == '.' || !has_so_ext(ent->d_name)) continue;
+		char path[1024];
+		snprintf(path, sizeof(path), "%s/%s", cachedir, ent->d_name);
+		remove(path);
+		LOGI("cleared cache so: %s", ent->d_name);
 	}
+	closedir(d);
+}
+
+void unload_mod_libraries(void) {
 	hook_delete_mod_hooks();
 	for (int i = g_mod_handle_count - 1; i >= 0; i--) {
 		if (g_mod_handles[i]) {
@@ -335,6 +345,7 @@ void unload_mod_libraries(void) {
 		}
 	}
 	g_mod_handle_count = 0;
+	clear_cache_sos();
 }
 
 //extern void save_manager_on_mod_exit(void);
