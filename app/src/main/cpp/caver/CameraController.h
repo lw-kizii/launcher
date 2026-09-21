@@ -9,22 +9,24 @@
 
 typedef struct CameraController {
 	int flags;
-	char _pad0[archSplit(0x0c, 0x0c)];
+	Vector3 lookOffset;
 	Vector3 targetPos;
 	float lerpFactor;
-	Vector3 currentPos;
-	float zoom;
 	Vector3 focusPos;
-	char _pad1[archSplit(0x14, 0x1c)];
+	float zoomLerp;
+	Vector3 currentPos;
+	Vector3 currentFocus;
+	Vector3 up;
+	char _pad0[archSplit(0x00, 0x04)]; // some float on 64 bit?
 	Camera *camera;
 	void *cameraRef;
-	char _pad2[archSplit(0x00, 0x08)];
+	char _pad1[archSplit(0x00, 0x00)];
 	SceneObject *followObject;
-	void *followObjectRef;
+	void *followShape;
 	Vector3 followOffset;
-	char _pad3[archSplit(0x10, 0x18)];
+	Rectangle followRect;
+	float rumbleTime;
 	float rumble;
-	char _pad4[archSplit(0x00, 0x04)];
 } CameraController;
 
 CameraController *cameraController_from_L(lua_State *L);
