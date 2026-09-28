@@ -1,4 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Launcher</string>
+    <string name="ga_desc">Assets that override mod and vanilla assets. Experimental.</string>
+    <string name="ga_title">Global Assets</string>
+    <string name="clear_assets">Clear Assets</string>
+    <string name="import_assets">Import Assets</string>
+    <string name="fps_warning">Above 60 may be unstable on some devices</string>
+    <string name="fps_limit">FPS Limit</string>
+    <string name="settings">Settings</string>
+    <string name="fps_30">30</string>
+    <string name="fps_60">60</string>
+    <string name="fps_90">90</string>
+    <string name="fps_120">120</string>
+    <string name="fps_180">180</string>
 </resources>
