@@ -1,5 +1,6 @@
 package net.kiwi.launcher;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -18,6 +19,8 @@ import com.touchfoo.swordigo.Native;
 
 import net.kiwi.launcher.databinding.FragmentModsBinding;
 import net.kiwi.launcher.databinding.FragmentSettingsBinding;
+
+import java.io.File;
 
 public class SettingsFragment extends Fragment {
 
@@ -71,12 +74,41 @@ public class SettingsFragment extends Fragment {
 		}
 	}
 
+	private static boolean deleteRecursive(File fileOrDirectory) {
+		if (fileOrDirectory != null && fileOrDirectory.exists()) {
+			if (fileOrDirectory.isDirectory()) {
+				File[] children = fileOrDirectory.listFiles();
+				if (children != null) {
+					for (File child : children) {
+						deleteRecursive(child);
+					}
+				}
+			}
+			return fileOrDirectory.delete();
+		}
+		return false;
+	}
+
+	static void handleGlobalAssets(Button clear, Button imp) {
+		Activity act = MainActivity.getCurrentActivity();
+		File extFiles = act.getExternalFilesDir(null);
+		clear.setOnClickListener(l -> {
+			File resourcesDir = new File(extFiles, "resources");
+			deleteRecursive(resourcesDir);
+			if (resourcesDir.mkdirs()) Log.d("SettingsFragment", "Refreshed global resources");
+		});
+		imp.setOnClickListener(l -> {
+
+		});
+	}
+
 	@Nullable
 	@Override
 	public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
 		FragmentSettingsBinding binding = FragmentSettingsBinding.inflate(inflater, container, false);
 
-		handleButtons(binding.fps30, binding.fps60, binding.fps90, binding.fps120, binding.fps180);;
+		handleButtons(binding.fps30, binding.fps60, binding.fps90, binding.fps120, binding.fps180);
+		handleGlobalAssets(binding.gaClear, binding.gaImport);
 
 		binding.discordbtn.setOnClickListener(l -> {
 			// I don't trust Native.openUrl...
@@ -89,8 +121,6 @@ public class SettingsFragment extends Fragment {
 
 	/*
 	TODO:
-		- Add launcher data exporting/importing
-		- Add frame rate switcher
 		- Add global permissions such as allow_networking...
 		- Add clear cache
 	 */

@@ -1,6 +1,9 @@
 #include "hook.h"
 #include "log.h"
 #include "../libs/Gloss.h"
+#include <setjmp.h>
+#include <signal.h>
+#include <string.h>
 
 #define LOG_TAG "SwordigoHooks"
 
@@ -95,14 +98,33 @@ void hook_end_mod_capture(void) {
 	g_capturing_mod_hooks = 0;
 }
 
+static sigjmp_buf g_del_jmp;
+static volatile int g_del_safe = 0;
+
+static void del_segv_handler(int sig) {
+	if (g_del_safe) siglongjmp(g_del_jmp, 1);
+}
+
 void hook_delete_mod_hooks(void) {
 	LOGI("Deleting %d mod hook(s)...", g_mod_hook_count);
+	struct sigaction sa, old;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = del_segv_handler;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGSEGV, &sa, &old);
+	g_del_safe = 1;
 	for (int i = g_mod_hook_count - 1; i >= 0; i--) {
 		if (g_mod_hooks[i]) {
-			GlossHookDelete(g_mod_hooks[i]);
+			if (sigsetjmp(g_del_jmp, 1) == 0) {
+				GlossHookDelete(g_mod_hooks[i]);
+			} else {
+				LOGE("GlossHookDelete failed for hook %d, skipping", i);
+			}
 			g_mod_hooks[i] = NULL;
 		}
 	}
+	g_del_safe = 0;
+	sigaction(SIGSEGV, &old, NULL);
 	g_mod_hook_count = 0;
 }
 

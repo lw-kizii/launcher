@@ -116,7 +116,9 @@ public final class Util {
 		Window w = dialog.getWindow();
 		if (w != null) {
 			w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-			w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+			int maxW = (int) (ctx.getResources().getDisplayMetrics().widthPixels * 0.88f);
+			w.setLayout(maxW, ViewGroup.LayoutParams.WRAP_CONTENT);
+			w.setGravity(Gravity.CENTER);
 		}
 
 		if (negative != null) {

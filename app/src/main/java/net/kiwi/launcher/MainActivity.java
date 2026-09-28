@@ -1,6 +1,9 @@
 package net.kiwi.launcher;
 
 import android.annotation.SuppressLint;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.app.Activity;
@@ -64,15 +67,15 @@ public class MainActivity extends FragmentActivity {
 	public static Activity getCurrentActivity() { return instance; }
 	public static String currentMod() { return Launcher.currentMod(); }
 	public static String getTargetApkPath() { return instance != null ? instance.targetApkPath : null; }
-	
-	
+
+
 	// Native Methods!
-	
+
 	// main.c
 	public static native void init();
 	// java.c
 	public static native void initPaths(String internalFiles, String internalCache, String externalFiles);
-	
+
 	// main.c, used to load hooks!
 	public static native void loadHooks();
 	// main.c, used to unload assets, hooks, etc.
@@ -88,7 +91,7 @@ public class MainActivity extends FragmentActivity {
 		}
 		return "armeabi-v7a";
 	}
-	
+
 	// Get the extracted path of the libraries
 	public static File getExtractedPath() {
 		MainActivity act = instance;
@@ -124,9 +127,9 @@ public class MainActivity extends FragmentActivity {
 		// UI, Previous Crash
 		showLauncherUi();
 		checkPreviousCrash();
-		
+
 		prepareSwordigo();
-		
+
 		// Launcher updates
 		checkForUpdate();
 	}
@@ -216,9 +219,22 @@ public class MainActivity extends FragmentActivity {
 	private void checkPreviousCrash() {
 		File crashLog = new File(getFilesDir(), "last_crash.log");
 		if (!crashLog.exists() || crashLog.length() == 0) return;
-		//noinspection ResultOfMethodCallIgnored
 		Util.alert(this, "Oops, the launcher crashed.",
-			"A previous session ended with a native crash.",
+			"A previous session ended with a native crash.\n\nCopy the log or dismiss.",
+			"Copy Log", () -> {
+				try {
+					byte[] data = new byte[(int) crashLog.length()];
+					try (java.io.FileInputStream fis = new java.io.FileInputStream(crashLog)) {
+						fis.read(data);
+					}
+					String content = new String(data, StandardCharsets.UTF_8);
+					ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+					cm.setPrimaryClip(ClipData.newPlainText("crash_log", content));
+					Toast.makeText(this, "Crash log copied", Toast.LENGTH_SHORT).show();
+				} catch (Exception e) {
+					Toast.makeText(this, "Failed to copy log", Toast.LENGTH_SHORT).show();
+				}
+			},
 			"Dismiss", crashLog::delete);
 	}
 
@@ -241,10 +257,10 @@ public class MainActivity extends FragmentActivity {
 	@SuppressLint("UnsafeDynamicallyLoadedCode")
 	private void startGame() {
 		if (targetApkPath == null) return;
-		
+
 		// library dir.
 		File libDir = getExtractedPath();
-		
+
 		// Load the libraries nicely...
 		System.load(new File(libDir, "libopenal-soft.so").getAbsolutePath());
 		System.load(new File(libDir, "libswordigo.so").getAbsolutePath());
@@ -254,9 +270,9 @@ public class MainActivity extends FragmentActivity {
 		FrameLayout gameRoot = new FrameLayout(this);
 		gameRoot.setLayoutParams(
 			new ViewGroup.LayoutParams(
-					ViewGroup.LayoutParams.MATCH_PARENT,
-					ViewGroup.LayoutParams.MATCH_PARENT
-				)
+				ViewGroup.LayoutParams.MATCH_PARENT,
+				ViewGroup.LayoutParams.MATCH_PARENT
+			)
 		);
 
 		glSurfaceView = new GameView(this);
@@ -267,13 +283,13 @@ public class MainActivity extends FragmentActivity {
 
 		setContentView(gameRoot);
 		enableImmersiveMode(); /* hide navigation ui/other stuff */
-		
+
 		// Initialize the ButtonController library over gameRoot :)
 		ButtonController.init(this, gameRoot);
 
 		// Native Environment Setup
 		setupNativeEnvironment(targetApkPath);
-		
+
 		// gearButton (for closing the mod)
 		Launcher.initGameButtons(this);
 		hooksLoaded = true;
