@@ -23,7 +23,7 @@
 #define SEEKBAR_MT "MiniSeekBar"
 #define TEXTINPUT_MT "MiniTextInput"
 
-#define JCLASS "net/kiwi/launcher/ButtonController"
+#define JCLASS "net/kiwi/overlay/Controller"
 
 typedef struct {
 	char *id;

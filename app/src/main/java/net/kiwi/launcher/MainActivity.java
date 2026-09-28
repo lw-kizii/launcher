@@ -285,7 +285,7 @@ public class MainActivity extends FragmentActivity {
 		enableImmersiveMode(); /* hide navigation ui/other stuff */
 
 		// Initialize the ButtonController library over gameRoot :)
-		ButtonController.init(this, gameRoot);
+		net.kiwi.overlay.Controller.init(this, gameRoot); // net/kiwi/overlay
 
 		// Native Environment Setup
 		setupNativeEnvironment(targetApkPath);
@@ -327,7 +327,7 @@ public class MainActivity extends FragmentActivity {
 		if (glSurfaceView != null) glSurfaceView.onPause();
 		Launcher.destroyGameButtons(); // destroy gear button
 		glSurfaceView = null;
-		ButtonController.removeAll(); // remove buttons
+		net.kiwi.overlay.Controller.removeAll(); // remove buttons
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT); // jump to portrait mode
 
 		showLauncherUi(); // show the launcher ui again
