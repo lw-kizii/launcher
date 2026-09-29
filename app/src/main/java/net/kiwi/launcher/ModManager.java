@@ -152,7 +152,7 @@ public class ModManager {
 			}
 			deleteRecursive(backup);
 
-			// Fetch icon from Github lol
+			// Fetch icon from GitHub lol
 			if (iconUrl != null && !iconUrl.isEmpty()) downloadIcon(iconUrl, new File(targetDir, "icon.png"));
 			info.dir = targetDir;
 			return info;
