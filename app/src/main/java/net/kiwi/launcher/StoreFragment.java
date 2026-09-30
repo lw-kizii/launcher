@@ -1,5 +1,8 @@
 package net.kiwi.launcher;
 
+import static android.view.View.VISIBLE;
+
+import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
@@ -10,6 +13,7 @@ import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -51,6 +55,7 @@ public class StoreFragment extends Fragment {
 
 	static class StoreEntry {
 		String id, name, description, downloadUrl, iconUrl;
+		ItemStoreModBinding binding;
 	}
 
 	@Nullable
@@ -87,7 +92,7 @@ public class StoreFragment extends Fragment {
 				all.addAll(parse(cached));
 				applyFilter(textOf(binding.search));
 			}
-			binding.progress.setVisibility(View.VISIBLE);
+			binding.progress.setVisibility(VISIBLE);
 		}
 
 		new Thread(() -> {
@@ -179,13 +184,18 @@ public class StoreFragment extends Fragment {
 		diff.dispatchUpdatesTo(adapter);
 	}
 
+	@SuppressLint("SetTextI18n")
 	@SuppressWarnings("ResultOfMethodCallIgnored")
 	private void install(StoreEntry entry) {
+		TextView pb = entry.binding.progressBar;
+		pb.setVisibility(View.VISIBLE);
+		pb.setText("Downloading...");
+
 		Toast.makeText(requireContext(), "Downloading " + entry.name + "…", Toast.LENGTH_SHORT).show();
 		new Thread(() -> {
 			File zip = new File(requireContext().getCacheDir(), "store_" + System.currentTimeMillis() + ".zip");
 			try {
-				downloadTo(entry.downloadUrl, zip);
+				downloadTo(entry.downloadUrl, zip, pb);
 				ModManager.installMod(requireContext(), zip, entry.iconUrl, new ModManager.InstallCallback() {
 					@Override
 					public void onSuccess(ModManager.ModInfo mod) {
@@ -227,8 +237,7 @@ public class StoreFragment extends Fragment {
 	interface ImageCallback { void onBitmap(Bitmap bmp); }
 
 	private static String httpGetStore() throws Exception {
-		HttpURLConnection conn = (HttpURLConnection) new URL(
-			"https://raw.githubusercontent.com/lw-kizii/_/main/launcher-data/store.json"
+		HttpURLConnection conn = (HttpURLConnection) new URL("https://raw.githubusercontent.com/lw-kizii/_/main/launcher-data/store.json"
 		).openConnection();
 		conn.setRequestMethod("GET");
 		conn.setConnectTimeout(10000);
@@ -249,18 +258,42 @@ public class StoreFragment extends Fragment {
 		}
 	}
 
-	private static void downloadTo(String urlStr, File dest) throws Exception {
+	@SuppressLint("SetTextI18n")
+	private void downloadTo(String urlStr, File dest, TextView pb) throws Exception {
 		HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
 		conn.setConnectTimeout(15000);
 		conn.setReadTimeout(60000);
 		conn.setInstanceFollowRedirects(true);
 		conn.setRequestProperty("User-Agent", "Mozilla/5.0");
-		if (conn.getResponseCode() != 200) throw new Exception("HTTP " + conn.getResponseCode());
-		try (InputStream in = conn.getInputStream(); FileOutputStream out = new FileOutputStream(dest)) {
+
+		if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
+			throw new Exception("HTTP " + conn.getResponseCode());
+		}
+
+		int contentLength = conn.getContentLength();
+
+		try (InputStream in = conn.getInputStream();
+		     FileOutputStream out = new FileOutputStream(dest)) {
+
 			byte[] buf = new byte[8192];
 			int n;
-			while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+			long totalRead = 0;
+
+			while ((n = in.read(buf)) != -1) {
+				out.write(buf, 0, n);
+				totalRead += n;
+
+				if (contentLength > 0) {
+					int progress = (int) ((totalRead * 100) / contentLength);
+					main.post(() -> pb.setText("Downloading " + progress + "%"));
+				} else {
+					long kbRead = totalRead / 1024;
+					main.post(() -> pb.setText("Downloading " + kbRead + " KB"));
+				}
+			}
 		}
+		main.post(() -> pb.setText("Downloaded!"));
+		main.postDelayed(() -> pb.setVisibility(View.GONE), 1500);
 	}
 
 	private static String sanitize(String raw) {
@@ -295,6 +328,7 @@ public class StoreFragment extends Fragment {
 		@Override
 		public void onBindViewHolder(@NonNull VH h, int position) {
 			StoreEntry e = filtered.get(position);
+			e.binding = h.b;
 			h.b.name.setText(e.name);
 			h.b.desc.setText(e.description != null ? e.description : "");
 			h.b.icon.setImageResource(R.drawable.ic_store);

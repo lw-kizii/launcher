@@ -1,6 +1,7 @@
 package net.kiwi.launcher;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -10,6 +11,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -20,7 +22,15 @@ import com.touchfoo.swordigo.Native;
 import net.kiwi.launcher.databinding.FragmentModsBinding;
 import net.kiwi.launcher.databinding.FragmentSettingsBinding;
 
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class SettingsFragment extends Fragment {
 
@@ -31,6 +41,44 @@ public class SettingsFragment extends Fragment {
 		public FPSHandle(Button btn, int fps) {
 			this.btn = btn;
 			this.fps = fps;
+		}
+	}
+
+	// Simple helpers, should be moved to Util honestly
+	static void doNothing() {}
+	private static void ensureDir(File dir) {
+		if (dir != null && !dir.exists() && !dir.mkdirs() && !dir.isDirectory()) {
+			doNothing();
+		}
+	}
+	private static void extractZip(Context context, Uri uri, File destDir) throws Exception {
+		try (InputStream is = context.getContentResolver().openInputStream(uri)) {
+			if (is == null) throw new IOException("could not open file");
+			inflateZip(is, destDir);
+		}
+	}
+	private static void extractZipFile(File zipFile, File destDir) throws Exception {
+		try (InputStream is = new FileInputStream(zipFile)) {
+			inflateZip(is, destDir);
+		}
+	}
+	private static void inflateZip(InputStream is, File destDir) throws Exception {
+		try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(is))) {
+			ZipEntry entry;
+			while ((entry = zis.getNextEntry()) != null) {
+				if (entry.isDirectory()) continue;
+				String entryName = entry.getName();
+				if (entryName.contains("..")) continue;
+				File target = new File(destDir, entryName);
+				File parent = target.getParentFile();
+				if (parent != null) ensureDir(parent);
+				try (FileOutputStream fos = new FileOutputStream(target)) {
+					byte[] buffer = new byte[8192];
+					int count;
+					while ((count = zis.read(buffer)) != -1) fos.write(buffer, 0, count);
+				}
+				zis.closeEntry();
+			}
 		}
 	}
 
@@ -89,17 +137,55 @@ public class SettingsFragment extends Fragment {
 		return false;
 	}
 
-	static void handleGlobalAssets(Button clear, Button imp) {
+	void handleGlobalAssets(Button clear, Button imp) {
 		Activity act = MainActivity.getCurrentActivity();
 		File extFiles = act.getExternalFilesDir(null);
 		clear.setOnClickListener(l -> {
 			File resourcesDir = new File(extFiles, "resources");
 			deleteRecursive(resourcesDir);
-			if (resourcesDir.mkdirs()) Log.d("SettingsFragment", "Refreshed global resources");
+			if (resourcesDir.mkdirs()) {
+				Toast.makeText(act, "Cleared global assets.", Toast.LENGTH_SHORT).show();
+				Log.d("SettingsFragment", "Refreshed global resources");
+			}
 		});
 		imp.setOnClickListener(l -> {
-
+			Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+			intent.addCategory(Intent.CATEGORY_OPENABLE);
+			intent.setType("*/*");
+			startActivityForResult(intent, 10001);
 		});
+	}
+
+	@Override
+	public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+		super.onActivityResult(requestCode, resultCode, data);
+		if (requestCode != 10001 || resultCode != android.app.Activity.RESULT_OK || data == null || data.getData() == null) return;
+		Uri uri = data.getData();
+		String name = uri.getLastPathSegment();
+		if (name == null) name = "import";
+		name = name.toLowerCase(Locale.ROOT);
+		if (!name.endsWith(".zip")) return;
+		Activity act = MainActivity.getCurrentActivity();
+		try {
+			throw new RuntimeException();
+//			extractZip(MainActivity.getCurrentActivity(), uri,
+//				new File(act.getExternalFilesDir(null), "resources")
+//			);
+		} catch (Exception e) {
+			Util.alert(
+				act,
+				"Failed to import assets",
+				String.valueOf(e),
+				"Okay", () -> {
+					Log.d("SettingsFragment", "Clicked on Okay");
+				},
+				"Report on Discord", () -> {
+					Toast.makeText(act, "Opening Discord...", Toast.LENGTH_SHORT).show();
+					Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://discord.gg/cF6Krcb28V"));
+					startActivity(intent);
+				}
+			);
+		}
 	}
 
 	@Nullable

@@ -8,9 +8,7 @@
 
 #define LOG_TAG "LauncherMain"
 
-extern void assets_on_mod_exit(void);
-extern void saves_on_mod_exit(void);
-extern void init_saves(void);
+#include "ml/ml.h"
 
 extern void init_API();
 
@@ -20,18 +18,16 @@ JNIEXPORT void JNICALL
 Java_net_kiwi_launcher_MainActivity_loadHooks(JNIEnv *env, jclass clazz) {
 	init_crasher();
 	init_hooks();
-	init_assets();
-	load_mod_libraries();
 	init_lua();
 	init_lual();
-	init_saves();
 	init_API();
+
+	ML_init();
 }
 
 JNIEXPORT void JNICALL
 Java_net_kiwi_launcher_MainActivity_onModExit(JNIEnv *env, jclass clazz) {
-	assets_on_mod_exit();
-	saves_on_mod_exit();
+	ML_exit();
 }
 
 JNIEXPORT void JNICALL

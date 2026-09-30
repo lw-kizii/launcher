@@ -11,18 +11,22 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         core/crasher.c
         core/hook.c
         core/java.c
-        core/32patch.c
-        core/assets.c
-        core/saves.c
+        core/lua_patches.c
         core/stdstring.c
         core/jpatch.c
-        core/map.c
-        core/toml.c
+
+        # Mod Loader
+        ml/init.c
+        ml/utils.c
+        ml/libloading.c
+        ml/assets_hooks.c
+        ml/saves_hooks.c
 
         # Hooks
         hooks/Component/CharControllerComponent.c
         hooks/Component/EntityComponent.c
         hooks/PhysicsObjectState.c
+        hooks/AchievementsManager.c
         hooks/Camera.c
         hooks/CameraController.c
         hooks/GameSceneController.c
@@ -74,6 +78,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/lua
         ${CMAKE_CURRENT_SOURCE_DIR}/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/ml
         ${CMAKE_CURRENT_SOURCE_DIR}/libs
         ${CMAKE_CURRENT_SOURCE_DIR}/caver
         ${CMAKE_CURRENT_SOURCE_DIR}/api
