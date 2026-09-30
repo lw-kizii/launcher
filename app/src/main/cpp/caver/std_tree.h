@@ -49,16 +49,16 @@ static inline void std_tree_rotate_right(std_tree_node *x) {
 	x->parent = y;
 }
 
-static inline void std_tree_balance(std_tree_node *root, std_tree_node *x) {
-	x->black = (x == root);
-	while (x != root && !x->parent->black) {
+static inline void std_tree_balance(std_tree_node **root_ptr, std_tree_node *x) {
+	x->black = (x == *root_ptr);
+	while (x != *root_ptr && !x->parent->black) {
 		int l = std_tree_node_is_left(x->parent);
 		std_tree_node *y = l ? x->parent->parent->right : x->parent->parent->left;
 		if (y && !y->black) {
 			x = x->parent;
 			x->black = 1;
 			x = x->parent;
-			x->black = (x == root);
+			x->black = (x == *root_ptr);
 			y->black = 1;
 		} else {
 			if ((l != 0) == (!std_tree_node_is_left(x))) {

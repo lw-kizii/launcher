@@ -61,7 +61,7 @@ static void treeInsert(std_tree *t, const char *key, void *ptr, void *ctrl, int 
 	n->parent = parent;
 	*slot = n;
 	if (t->begin->left) t->begin = t->begin->left;
-	std_tree_balance(t->root, n);
+	std_tree_balance(&t->root, n);
 	t->size++;
 }
 
@@ -105,46 +105,22 @@ void AM_AddAchievement(AchievementsManager *m, const char *id, const char *title
 	treeInsert(byKey, key, a, cb, 1);
 }
 
-static void freeNodes(std_tree_node *n) {
-	if (!n) return;
-	freeNodes(n->left);
-	freeNodes(n->right);
-	String_destroy(nodeKey(n));
-	free(n);
-}
-
 void AM_ClearAchievements(AchievementsManager *m) {
 	if (!m) return;
 	char *mb = (char *)m;
 
 	std_vector *list = (std_vector *)(mb + M_LIST);
-	for (char *p = list->begin; p < list->end; p += 2 * PS) {
-		Achievement *a = *(Achievement **)p;
-		void *cb = *(void **)(p + PS);
-		char *ab = (char *)a;
-		String_destroy((String *)(ab + A_ID));
-		String_destroy((String *)(ab + A_TITLE));
-		String_destroy((String *)(ab + A_DESC));
-		String_destroy((String *)(ab + A_STAT));
-		free(a);
-		free(cb);
-	}
 	std_vector_clear(list);
 
 	std_vector *keys = (std_vector *)(mb + M_KEYS);
-	for (char *p = keys->begin; p < keys->end; p += SS) {
-		String_destroy((String *)p);
-	}
 	std_vector_clear(keys);
 
 	std_tree *byId = (std_tree *)(mb + M_BYID);
-	freeNodes(byId->root);
 	byId->root = NULL;
 	byId->begin = (std_tree_node *)&byId->root;
 	byId->size = 0;
 
 	std_tree *byKey = (std_tree *)(mb + M_BYKEY);
-	freeNodes(byKey->root);
 	byKey->root = NULL;
 	byKey->begin = (std_tree_node *)&byKey->root;
 	byKey->size = 0;
