@@ -2,6 +2,8 @@
 #define LAUNCHER_ACHIEVEMENTSMANAGER_H
 
 #include "hook.h"
+#include "std_vector.h"
+#include "std_tree.h"
 
 typedef struct AchievementsManager {
 	char _pad0[archSplit(0x24, 0x48)];
@@ -11,6 +13,8 @@ typedef struct AchievementsManager {
 typedef struct Achievement {
 	char _pad[archSplit(0x38, 0x70)];
 } Achievement; // sizeof == archSplit(0x38, 0x70)
+
+DL_SYMBOL_DECL(AchievementsManager_sharedManager, AchievementsManager*, (void));
 
 void AM_AddAchievement(
     AchievementsManager *m,

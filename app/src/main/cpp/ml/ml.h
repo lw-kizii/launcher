@@ -21,5 +21,6 @@ void ML_unload_mod_libraries(void);
 
 struct AchievementsManager;
 int ML_LoadAchievements(struct AchievementsManager *m);
+void ML_ReloadAchievements(void);
 
 #endif //LAUNCHER_ML_H

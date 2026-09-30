@@ -7,6 +7,7 @@
 void ML_init(void) {
 	LOGI("Start of ML Override");
 	ML_load_mod_libraries();
+	ML_ReloadAchievements();
 	LOGI("ML Override ready");
 }
 
