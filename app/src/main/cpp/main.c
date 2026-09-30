@@ -12,8 +12,6 @@
 
 extern void init_API();
 
-//extern void init_jpatch(void);
-
 JNIEXPORT void JNICALL
 Java_net_kiwi_launcher_MainActivity_loadHooks(JNIEnv *env, jclass clazz) {
 	init_crasher();
@@ -21,7 +19,6 @@ Java_net_kiwi_launcher_MainActivity_loadHooks(JNIEnv *env, jclass clazz) {
 	init_lua();
 	init_lual();
 	init_API();
-
 	ML_init();
 }
 
