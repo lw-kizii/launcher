@@ -3,6 +3,7 @@
 #include "AchievementsManager.h"
 #include "stdstring.h"
 #include "log.h"
+#include "ml.h"
 
 #define LOG_TAG "AchievementsStuff"
 
@@ -182,16 +183,56 @@ void AM_AddAchievement(AchievementsManager *m, const char *id, const char *title
 	treeInsert(byKey, key, a, cb, 1);
 }
 
+static void freeNodes(Node *n) {
+	if (!n) return;
+	freeNodes(n->left);
+	freeNodes(n->right);
+	String_destroy(nodeKey(n));
+	free(n);
+}
+
+void AM_ClearAchievements(AchievementsManager *m) {
+	char *mb = (char *)m;
+
+	Vec *list = (Vec *)(mb + M_LIST);
+	for (char *p = list->begin; p < list->end; p += 2 * PS) {
+		Achievement *a = *(Achievement **)p;
+		void *cb = *(void **)(p + PS);
+		char *ab = (char *)a;
+		String_destroy((String *)(ab + A_ID));
+		String_destroy((String *)(ab + A_TITLE));
+		String_destroy((String *)(ab + A_DESC));
+		String_destroy((String *)(ab + A_STAT));
+		free(a);
+		free(cb);
+	}
+	list->end = list->begin;
+
+	Vec *keys = (Vec *)(mb + M_KEYS);
+	for (char *p = keys->begin; p < keys->end; p += SS) {
+		String_destroy((String *)p);
+	}
+	keys->end = keys->begin;
+
+	Tree *byId = (Tree *)(mb + M_BYID);
+	freeNodes(byId->root);
+	byId->root = NULL;
+	byId->begin = (Node *)&byId->root;
+	byId->size = 0;
+
+	Tree *byKey = (Tree *)(mb + M_BYKEY);
+	freeNodes(byKey->root);
+	byKey->root = NULL;
+	byKey->begin = (Node *)&byKey->root;
+	byKey->size = 0;
+}
+
 HOOK_SYMBOL(
 	AchievementsManager_Constructor,
 	"_ZN5Caver19AchievementsManagerC2Ev",
 	void, (AchievementsManager *this)
 ) {
 	orig_AchievementsManager_Constructor(this);
-	AM_AddAchievement(
-		this,
-		"thekiwi", "Kiwi Achievement",
-		"Add awesome custom achievements feature!", 1337,
-		NULL, 0
-	);
+	AM_ClearAchievements(this);
+//	ML_LoadAchievements(this);
 }

@@ -19,4 +19,7 @@ void ML_exit(void);
 void ML_load_mod_libraries(void);
 void ML_unload_mod_libraries(void);
 
+struct AchievementsManager;
+int ML_LoadAchievements(struct AchievementsManager *m);
+
 #endif //LAUNCHER_ML_H

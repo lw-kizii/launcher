@@ -21,6 +21,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         ml/libloading.c
         ml/assets_hooks.c
         ml/saves_hooks.c
+        ml/achievements.c
 
         # Libs
         libs/toml.c
