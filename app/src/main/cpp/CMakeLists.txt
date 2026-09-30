@@ -22,6 +22,9 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         ml/assets_hooks.c
         ml/saves_hooks.c
 
+        # Libs
+        libs/toml.c
+
         # Hooks
         hooks/Component/CharControllerComponent.c
         hooks/Component/EntityComponent.c
