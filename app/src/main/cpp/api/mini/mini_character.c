@@ -142,9 +142,9 @@ DIR_FUNC(StartMovingToDirection, "_ZN5Caver23CharControllerComponent22StartMovin
 DIR_FUNC(StopMovingToDirection, "_ZN5Caver23CharControllerComponent21StopMovingToDirectionEi")
 
 static int L_SetMovementFacingLock(lua_State *L) {
-	bool lock = lua_toboolean(L, 1);
+	bool lock = (!lua_toboolean(L, 1));
 	CharControllerComponent *cc = fetch(L);
-	*$(bool, cc, 0x1c4, 0x2e4) = lock;
+	*$(bool, cc, 0x139, 0x23d) = lock;
 	return 0;
 }
 
