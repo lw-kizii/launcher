@@ -12,21 +12,17 @@
 #include <stdarg.h>
 #include <jni.h>
 #include <sys/types.h>
-
 #define LOG_TAG "NativeCrashCatcher"
-
 #if defined(__arm__)
-	#define GET_PC(ctx) ((ctx)->uc_mcontext.arm_pc)
+#define GET_PC(ctx) ((ctx)->uc_mcontext.arm_pc)
 	#define GET_LR(ctx) ((ctx)->uc_mcontext.arm_lr)
 	#define GET_SP(ctx) ((ctx)->uc_mcontext.arm_sp)
 #elif defined(__aarch64__)
-	#define GET_PC(ctx) ((ctx)->uc_mcontext.pc)
-	#define GET_LR(ctx) ((ctx)->uc_mcontext.regs[30])
-	#define GET_SP(ctx) ((ctx)->uc_mcontext.sp)
+#define GET_PC(ctx) ((ctx)->uc_mcontext.pc)
+#define GET_LR(ctx) ((ctx)->uc_mcontext.regs[30])
+#define GET_SP(ctx) ((ctx)->uc_mcontext.sp)
 #endif
-
 static struct sigaction g_old_sa[NSIG];
-
 static char g_crash_log_path[512] = {0};
 static char g_altstack[SIGSTKSZ];
 struct BacktraceState {
@@ -34,13 +30,11 @@ struct BacktraceState {
 	int fd;
 	int max_depth;
 };
-
 static const char *get_basename(const char *path) {
 	if (!path) return "unknown_lib";
 	const char *slash = strrchr(path, '/');
 	return slash ? slash + 1 : path;
 }
-
 static void log_both(int fd, const char *fmt, ...) {
 	char buf[768];
 	va_list ap;
@@ -55,7 +49,6 @@ static void log_both(int fd, const char *fmt, ...) {
 		write(fd, "\n", 1);
 	}
 }
-
 static void log_frame(int fd, int depth, uintptr_t pc) {
 	if (!pc) {
 		log_both(fd, "\t#%02d pc 00000000  <null>", depth);
@@ -75,7 +68,6 @@ static void log_frame(int fd, int depth, uintptr_t pc) {
 		log_both(fd, "\t#%02d pc %08zx  <unknown>", depth, pc);
 	}
 }
-
 static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context *context, void *arg) {
 	struct BacktraceState *state = (struct BacktraceState *)arg;
 	if (state->current_depth >= state->max_depth) return _URC_END_OF_STACK;
@@ -83,6 +75,70 @@ static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context *context, void
 	if (pc && state->current_depth > 0) log_frame(state->fd, state->current_depth, pc);
 	state->current_depth++;
 	return _URC_NO_REASON;
+}
+
+static void dump_registers(int fd, ucontext_t *uc) {
+	log_both(fd, "registers:");
+#if defined(__aarch64__)
+	for (int i = 0; i < 29; i += 4) {
+		log_both(fd, "\tx%-2d %016llx  x%-2d %016llx  x%-2d %016llx  x%-2d %016llx",
+				i, (unsigned long long)uc->uc_mcontext.regs[i],
+				i + 1, (unsigned long long)uc->uc_mcontext.regs[i + 1],
+				i + 2, (unsigned long long)uc->uc_mcontext.regs[i + 2],
+				i + 3, (unsigned long long)uc->uc_mcontext.regs[i + 3]);
+	}
+	log_both(fd, "\tfp  %016llx  lr  %016llx  sp  %016llx  pc  %016llx",
+			(unsigned long long)uc->uc_mcontext.regs[29],
+			(unsigned long long)uc->uc_mcontext.regs[30],
+			(unsigned long long)uc->uc_mcontext.sp,
+			(unsigned long long)uc->uc_mcontext.pc);
+#elif defined(__arm__)
+	log_both(fd, "\tr0  %08lx  r1  %08lx  r2  %08lx  r3  %08lx",
+		(unsigned long)uc->uc_mcontext.arm_r0, (unsigned long)uc->uc_mcontext.arm_r1,
+		(unsigned long)uc->uc_mcontext.arm_r2, (unsigned long)uc->uc_mcontext.arm_r3);
+	log_both(fd, "\tr4  %08lx  r5  %08lx  r6  %08lx  r7  %08lx",
+		(unsigned long)uc->uc_mcontext.arm_r4, (unsigned long)uc->uc_mcontext.arm_r5,
+		(unsigned long)uc->uc_mcontext.arm_r6, (unsigned long)uc->uc_mcontext.arm_r7);
+	log_both(fd, "\tr8  %08lx  r9  %08lx  r10 %08lx  fp  %08lx",
+		(unsigned long)uc->uc_mcontext.arm_r8, (unsigned long)uc->uc_mcontext.arm_r9,
+		(unsigned long)uc->uc_mcontext.arm_r10, (unsigned long)uc->uc_mcontext.arm_fp);
+	log_both(fd, "\tip  %08lx  sp  %08lx  lr  %08lx  pc  %08lx",
+		(unsigned long)uc->uc_mcontext.arm_ip, (unsigned long)uc->uc_mcontext.arm_sp,
+		(unsigned long)uc->uc_mcontext.arm_lr, (unsigned long)uc->uc_mcontext.arm_pc);
+	log_both(fd, "\tcpsr %08lx", (unsigned long)uc->uc_mcontext.arm_cpsr);
+#endif
+}
+
+static void dump_maps(int fd) {
+	int mfd = open("/proc/self/maps", O_RDONLY);
+	if (mfd < 0) {
+		log_both(fd, "maps: <unavailable>");
+		return;
+	}
+	log_both(fd, "maps:");
+	char buf[512];
+	char line[768];
+	int pos = 0;
+	ssize_t n;
+	while ((n = read(mfd, buf, sizeof(buf))) > 0) {
+		for (ssize_t i = 0; i < n; i++) {
+			char c = buf[i];
+			if (c == '\n') {
+				if (pos > 0) {
+					line[pos] = '\0';
+					log_both(fd, "\t%s", line);
+					pos = 0;
+				}
+			} else if (pos < (int)sizeof(line) - 1) {
+				line[pos++] = c;
+			}
+		}
+	}
+	if (pos > 0) {
+		line[pos] = '\0';
+		log_both(fd, "\t%s", line);
+	}
+	close(mfd);
 }
 
 static void native_crash_handler(int sig, siginfo_t *info, void *context) {
@@ -100,11 +156,13 @@ static void native_crash_handler(int sig, siginfo_t *info, void *context) {
 	log_both(fd, "Timestamp: %s", tbuf);
 	log_both(fd, "signal %d (%s), code %d, fault addr %p", sig, strsignal(sig), info->si_code, info->si_addr);
 	log_both(fd, "\tpc  %016zx  lr  %016zx  sp  %016zx", pc, lr, sp);
+	dump_registers(fd, uc);
 	log_both(fd, "backtrace:");
 	log_frame(fd, 0, pc);
 	if (lr && lr != pc) log_frame(fd, 1, lr);
 	struct BacktraceState state = {2, fd, 32};
 	_Unwind_Backtrace(unwind_callback, &state);
+	dump_maps(fd);
 	log_both(fd, "===== NCC End =====");
 	if (fd >= 0) {
 		fsync(fd);
