@@ -1,41 +1,38 @@
 #include "core.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
 #include <ucontext.h>
 #include <dlfcn.h>
 #include <unwind.h>
-#include <android/log.h>
+#include "log.h"
 #include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <jni.h>
+#include <sys/types.h>
 
 #define LOG_TAG "NativeCrashCatcher"
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
 #if defined(__arm__)
-#define GET_PC(ctx) ((ctx)->uc_mcontext.arm_pc)
+	#define GET_PC(ctx) ((ctx)->uc_mcontext.arm_pc)
+	#define GET_LR(ctx) ((ctx)->uc_mcontext.arm_lr)
+	#define GET_SP(ctx) ((ctx)->uc_mcontext.arm_sp)
 #elif defined(__aarch64__)
-#define GET_PC(ctx) ((ctx)->uc_mcontext.pc)
-#elif defined(__i386__)
-#define GET_PC(ctx) ((ctx)->uc_mcontext.gregs[REG_EIP])
-#elif defined(__x86_64__)
-    #define GET_PC(ctx) ((ctx)->uc_mcontext.gregs[REG_RIP])
-#else
-    #define GET_PC(ctx) 0
+	#define GET_PC(ctx) ((ctx)->uc_mcontext.pc)
+	#define GET_LR(ctx) ((ctx)->uc_mcontext.regs[30])
+	#define GET_SP(ctx) ((ctx)->uc_mcontext.sp)
 #endif
 
 static struct sigaction g_old_sa[NSIG];
 
 static char g_crash_log_path[512] = {0};
-
+static char g_altstack[SIGSTKSZ];
 struct BacktraceState {
 	int current_depth;
 	int fd;
+	int max_depth;
 };
 
 static const char *get_basename(const char *path) {
@@ -45,12 +42,13 @@ static const char *get_basename(const char *path) {
 }
 
 static void log_both(int fd, const char *fmt, ...) {
-	char buf[512];
+	char buf[768];
 	va_list ap;
 	va_start(ap, fmt);
 	int n = vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
 	if (n <= 0) return;
+	if (n >= (int)sizeof(buf)) n = (int)sizeof(buf) - 1;
 	__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "%s", buf);
 	if (fd >= 0) {
 		write(fd, buf, (size_t)n);
@@ -58,25 +56,31 @@ static void log_both(int fd, const char *fmt, ...) {
 	}
 }
 
-static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context* context, void* arg) {
-	struct BacktraceState* state = (struct BacktraceState*)arg;
-	uintptr_t pc = _Unwind_GetIP(context);
-
-	if (pc) {
-		Dl_info info;
-		if (dladdr((void*)pc, &info) != 0) {
-			const char *lib_name = get_basename(info.dli_fname);
-			const char *sym_name = info.dli_sname ? info.dli_sname : "<stripped_symbol>";
-			uintptr_t offset = pc - (uintptr_t)info.dli_fbase;
-
-			log_both(state->fd,
-			         "    #%02d pc %08zx  %s (%s + 0x%zx)",
-			         state->current_depth, offset, lib_name, sym_name,
-			         (info.dli_sname ? (pc - (uintptr_t)info.dli_saddr) : offset));
-		} else {
-			log_both(state->fd, "    #%02d pc %08zx  <unknown>", state->current_depth, pc);
-		}
+static void log_frame(int fd, int depth, uintptr_t pc) {
+	if (!pc) {
+		log_both(fd, "\t#%02d pc 00000000  <null>", depth);
+		return;
 	}
+	Dl_info info;
+	if (dladdr((void*)pc, &info) != 0 && info.dli_fname) {
+		const char *lib = get_basename(info.dli_fname);
+		uintptr_t off = pc - (uintptr_t)info.dli_fbase;
+		if (info.dli_sname) {
+			uintptr_t sym_off = pc - (uintptr_t)info.dli_saddr;
+			log_both(fd, "\t#%02d pc %08zx  %s (%s+0x%zx)", depth, off, lib, info.dli_sname, sym_off);
+		} else {
+			log_both(fd, "\t#%02d pc %08zx  %s", depth, off, lib);
+		}
+	} else {
+		log_both(fd, "\t#%02d pc %08zx  <unknown>", depth, pc);
+	}
+}
+
+static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context *context, void *arg) {
+	struct BacktraceState *state = (struct BacktraceState *)arg;
+	if (state->current_depth >= state->max_depth) return _URC_END_OF_STACK;
+	uintptr_t pc = _Unwind_GetIP(context);
+	if (pc && state->current_depth > 0) log_frame(state->fd, state->current_depth, pc);
 	state->current_depth++;
 	return _URC_NO_REASON;
 }
@@ -84,57 +88,48 @@ static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context* context, void
 static void native_crash_handler(int sig, siginfo_t *info, void *context) {
 	ucontext_t *uc = (ucontext_t *)context;
 	uintptr_t pc = GET_PC(uc);
-
+	uintptr_t lr = GET_LR(uc);
+	uintptr_t sp = GET_SP(uc);
 	int fd = -1;
-	if (g_crash_log_path[0] != '\0') {
-		fd = open(g_crash_log_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-	}
-
+	if (g_crash_log_path[0] != '\0') fd = open(g_crash_log_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	time_t now = time(NULL);
 	char tbuf[64];
 	strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", localtime(&now));
-
-	log_both(fd, "--- Native Crash Catcher");
-	log_both(fd, "%s", tbuf);
-	log_both(fd, "Signal: %d (%s) at address %p", sig, strsignal(sig), info->si_addr);
-
-	Dl_info dl_info;
-	if (pc != 0 && dladdr((void*)pc, &dl_info) != 0) {
-		const char *lib_name = get_basename(dl_info.dli_fname);
-		const char *sym_name = dl_info.dli_sname ? dl_info.dli_sname : "<stripped>";
-		uintptr_t offset = pc - (uintptr_t)dl_info.dli_fbase;
-		log_both(fd, "Faulting Instruction: pc %08zx | %s | %s", offset, lib_name, sym_name);
-	}
-
-	log_both(fd, "--- Stack Trace ---");
-	struct BacktraceState state = {0, fd};
+	log_both(fd, "===== NCC");
+	log_both(fd, "Native Crash Catcher  pid:%d  tid:%d", getpid(), gettid());
+	log_both(fd, "Timestamp: %s", tbuf);
+	log_both(fd, "signal %d (%s), code %d, fault addr %p", sig, strsignal(sig), info->si_code, info->si_addr);
+	log_both(fd, "\tpc  %016zx  lr  %016zx  sp  %016zx", pc, lr, sp);
+	log_both(fd, "backtrace:");
+	log_frame(fd, 0, pc);
+	if (lr && lr != pc) log_frame(fd, 1, lr);
+	struct BacktraceState state = {2, fd, 32};
 	_Unwind_Backtrace(unwind_callback, &state);
-	log_both(fd, "--- Stack Trace End ---");
-
+	log_both(fd, "===== NCC End =====");
 	if (fd >= 0) {
 		fsync(fd);
 		close(fd);
 	}
-
 	if (g_old_sa[sig].sa_flags & SA_SIGINFO) {
-		if (g_old_sa[sig].sa_sigaction != NULL) {
-			g_old_sa[sig].sa_sigaction(sig, info, context);
-		}
+		if (g_old_sa[sig].sa_sigaction) g_old_sa[sig].sa_sigaction(sig, info, context);
 	} else if (g_old_sa[sig].sa_handler != SIG_DFL && g_old_sa[sig].sa_handler != SIG_IGN) {
 		g_old_sa[sig].sa_handler(sig);
+	} else {
+		signal(sig, SIG_DFL);
+		raise(sig);
 	}
 }
 
 void init_crasher(void) {
+	stack_t ss = {.ss_sp = g_altstack, .ss_size = sizeof(g_altstack), .ss_flags = 0};
+	sigaltstack(&ss, NULL);
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
-	sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+	sa.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_RESETHAND;
 	sa.sa_sigaction = native_crash_handler;
-
-	int signals[] = { SIGSEGV, SIGABRT, SIGILL, SIGFPE, SIGBUS };
-	for (int i = 0; i < (int)(sizeof(signals) / sizeof(signals[0])); i++) {
-		sigaction(signals[i], &sa, &g_old_sa[signals[i]]);
-	}
+	sigemptyset(&sa.sa_mask);
+	int signals[] = {SIGSEGV, SIGABRT, SIGILL, SIGFPE, SIGBUS};
+	for (int i = 0; i < (int)(sizeof(signals) / sizeof(signals[0])); i++) sigaction(signals[i], &sa, &g_old_sa[signals[i]]);
 	LOGI("Crash handler installed!");
 }
 
