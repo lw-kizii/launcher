@@ -52,7 +52,7 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends FragmentActivity {
 
 	private static final String TAG = "Launcher";
-	private static final int Version = 83;
+	private static final int Version = 84;
 
 	private static MainActivity instance;
 	private GameView glSurfaceView;
