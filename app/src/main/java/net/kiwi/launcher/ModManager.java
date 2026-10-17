@@ -244,6 +244,7 @@ public class ModManager {
 
 	// This is slow... and I don't know why.
 	private static void downloadIcon(String urlStr, File dest) {
+		if (urlStr != null) urlStr = urlStr.replace("/launcher_data/", "/launcher-data/");
 		try {
 			HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
 			conn.setConnectTimeout(5000);

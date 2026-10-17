@@ -4,6 +4,7 @@
 #include "ProgramState.h"
 #include "log.h"
 #include "overlay/main.h"
+#include "lua_trace.h"
 
 // lua libs
 #include "lualib.h"
@@ -14,6 +15,18 @@ extern void API_register_mini(lua_State *L);
 extern void API_register_io(lua_State *L);
 extern void API_register_fs(lua_State *L);
 extern void API_register_os(lua_State *L);
+
+static void lua_call_hook(lua_State *L, lua_Debug *ar) {
+	if (!ar || ar->event != LUA_HOOKCALL) return;
+	lua_getinfo(L, "nS", ar);
+	const char *name = ar->name;
+	if (!name || !name[0]) {
+		if (ar->what && ar->what[0] == 'm') name = "(main)";
+		else if (ar->what && ar->what[0] == 'C') name = "(C)";
+		else name = "?";
+	}
+	lua_trace_record(name);
+}
 
 HOOK_SYMBOL(
 	RegisterProgramLibrary,
@@ -33,6 +46,9 @@ HOOK_SYMBOL(
 	API_register_io(L);
 	API_register_fs(L);
 	API_register_os(L);
+
+	if (lua_sethook && lua_getinfo)
+		lua_sethook(L, lua_call_hook, LUA_MASKCALL, 0);
 
 	LOGD("Lua libraries registered.");
 }

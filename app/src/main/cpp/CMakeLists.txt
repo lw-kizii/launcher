@@ -12,6 +12,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         core/hook.c
         core/java.c
         core/lua_patches.c
+        core/lua_trace.c
         core/stdstring.c
         core/jpatch.c
 

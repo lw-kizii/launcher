@@ -87,6 +87,11 @@ static void fetch_current_mod(void) {
 	LOGI("current mod: '%s'", g_current_mod[0] ? g_current_mod : "(vanilla)");
 }
 
+
+const char *java_current_mod_id_safe(void) {
+	return g_mod_fetched && g_current_mod[0] ? g_current_mod : "";
+}
+
 const char *java_current_mod_id(void) {
 	if (!g_mod_fetched) {
 		fetch_current_mod();

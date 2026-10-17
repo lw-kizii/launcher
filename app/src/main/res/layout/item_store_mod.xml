@@ -1,85 +1,111 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/root"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:padding="12dp">
+	android:id="@+id/root"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:background="?android:attr/selectableItemBackground"
+	android:orientation="vertical"
+	android:paddingHorizontal="12dp"
+	android:paddingTop="12dp"
+	android:paddingBottom="10dp">
 
-    <ImageView
-        android:id="@+id/icon"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:background="@color/card"
-        android:contentDescription="@null"
-        android:scaleType="centerCrop" />
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:gravity="center_vertical"
+		android:orientation="horizontal">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/text_block"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_weight="1">
+		<ImageView
+			android:id="@+id/icon"
+			android:layout_width="52dp"
+			android:layout_height="52dp"
+			android:background="#1A1826"
+			android:contentDescription="@null"
+			android:scaleType="centerCrop" />
 
-        <TextView
-            android:id="@+id/name"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="Mod Title"
-            android:textColor="@color/text_main"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            app:layout_constraintBottom_toTopOf="@+id/desc"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_chainStyle="packed" />
+		<LinearLayout
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_marginStart="12dp"
+			android:layout_weight="1"
+			android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/desc"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:text="Mod Description"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:paddingTop="2dp"
-            android:textColor="@color/text_dim"
-            android:textSize="12sp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/name" />
+			<TextView
+				android:id="@+id/name"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:ellipsize="end"
+				android:maxLines="1"
+				android:textColor="#E8E6F2"
+				android:textSize="15sp"
+				android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/progress_bar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:visibility="gone"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:paddingTop="2dp"
-            android:textColor="@color/text_dim"
-            android:textSize="12sp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/desc" />
-    </androidx.constraintlayout.widget.ConstraintLayout>
+			<TextView
+				android:id="@+id/desc"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:ellipsize="end"
+				android:maxLines="2"
+				android:paddingTop="2dp"
+				android:textColor="#A39EC0"
+				android:textSize="12sp" />
+		</LinearLayout>
 
-    <Button
-        android:id="@+id/btn_install"
-        android:layout_width="wrap_content"
-        android:layout_height="40dp"
-        android:backgroundTint="@color/accent_green"
-        android:minWidth="0dp"
-        android:paddingHorizontal="12dp"
-        android:text="Install"
-        android:textAllCaps="false"
-        android:textColor="@color/accent_dark"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+		<LinearLayout
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:gravity="center_horizontal"
+			android:orientation="vertical"
+			android:minWidth="48dp">
+
+			<ImageButton
+				android:id="@+id/btn_install"
+				android:layout_width="40dp"
+				android:layout_height="40dp"
+				android:background="?android:attr/selectableItemBackgroundBorderless"
+				android:contentDescription="Download"
+				android:padding="6dp"
+				android:scaleType="centerInside"
+				android:src="@drawable/ic_download"
+				android:tint="#57F287" />
+
+			<TextView
+				android:id="@+id/downloads"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:gravity="center"
+				android:textColor="#9CA3AF"
+				android:textSize="10sp" />
+		</LinearLayout>
+	</LinearLayout>
+
+	<LinearLayout
+		android:id="@+id/progress_row"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="8dp"
+		android:gravity="center_vertical"
+		android:orientation="horizontal"
+		android:visibility="gone">
+
+		<ProgressBar
+			android:id="@+id/progress_bar"
+			style="?android:attr/progressBarStyleHorizontal"
+			android:layout_width="0dp"
+			android:layout_height="8dp"
+			android:layout_weight="1"
+			android:max="100"
+			android:progress="0"
+			android:progressDrawable="@drawable/progress_store" />
+
+		<TextView
+			android:id="@+id/progress_text"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginStart="8dp"
+			android:minWidth="36dp"
+			android:text="0%"
+			android:textColor="#A6E3A1"
+			android:textSize="11sp" />
+	</LinearLayout>
 </LinearLayout>

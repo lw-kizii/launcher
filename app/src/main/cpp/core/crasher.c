@@ -12,6 +12,8 @@
 #include <stdarg.h>
 #include <jni.h>
 #include <sys/types.h>
+#include "lua_trace.h"
+#include "java.h"
 #define LOG_TAG "NativeCrashCatcher"
 #if defined(__arm__)
 #define GET_PC(ctx) ((ctx)->uc_mcontext.arm_pc)
@@ -154,6 +156,18 @@ static void native_crash_handler(int sig, siginfo_t *info, void *context) {
 	log_both(fd, "===== NCC");
 	log_both(fd, "Native Crash Catcher  pid:%d  tid:%d", getpid(), gettid());
 	log_both(fd, "Timestamp: %s", tbuf);
+#if defined(__aarch64__)
+	log_both(fd, "ABI: arm64-v8a (64-bit)");
+#elif defined(__arm__)
+	log_both(fd, "ABI: armeabi-v7a (32-bit)");
+#else
+	log_both(fd, "ABI: unknown");
+#endif
+	{
+		const char *mod = java_current_mod_id_safe();
+		log_both(fd, "Mod: %s", (mod && mod[0]) ? mod : "(vanilla)");
+	}
+	lua_trace_dump_fd(fd);
 	log_both(fd, "signal %d (%s), code %d, fault addr %p", sig, strsignal(sig), info->si_code, info->si_addr);
 	log_both(fd, "\tpc  %016zx  lr  %016zx  sp  %016zx", pc, lr, sp);
 	dump_registers(fd, uc);

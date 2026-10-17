@@ -121,7 +121,8 @@ public class MainActivity extends FragmentActivity {
 		System.loadLibrary("launcher");
 		// crash log path!
 		try {
-			setCrashLogPath(new File(getFilesDir(), "last_crash.log").getAbsolutePath());
+			AppLog.init(this);
+			setCrashLogPath(AppLog.crashLogFile(this).getAbsolutePath());
 		} catch (Throwable ignored) {}
 
 		// UI, Previous Crash
@@ -163,6 +164,7 @@ public class MainActivity extends FragmentActivity {
 		setContentView(binding.getRoot());
 		Util.attachSystemBarsPadding(binding.getRoot());
 
+		binding.pager.setOffscreenPageLimit(1);
 		binding.pager.setAdapter(new FragmentStateAdapter(this) {
 			@NonNull
 			@Override
@@ -170,20 +172,31 @@ public class MainActivity extends FragmentActivity {
 				if (position == 0) return new CurrentModFragment();
 				if (position == 1) return new ModsFragment();
 				if (position == 2) return new StoreFragment();
+				if (position == 3) return new FilesFragment();
 				return new SettingsFragment();
 			}
 
 			@Override
-			public int getItemCount() { return 4; }
+			public int getItemCount() { return 5; }
 		});
 
 		// Keep in sync!
 		binding.bottomNav.setOnItemSelectedListener(item -> {
 			int id = item.getItemId();
-			if (id == R.id.nav_current) { binding.pager.setCurrentItem(0, true); return true; }
-			if (id == R.id.nav_mods) { binding.pager.setCurrentItem(1, true); return true; }
-			if (id == R.id.nav_store) { binding.pager.setCurrentItem(2, true); return true; }
-			if (id == R.id.nav_settings) { binding.pager.setCurrentItem(3, true); return true; }
+			if (id == R.id.nav_current) { binding.pager.setCurrentItem(0, false); return true; }
+			if (id == R.id.nav_mods) { binding.pager.setCurrentItem(1, false); return true; }
+			if (id == R.id.nav_store) {
+				StoreFragment.closeDetailIfOpen();
+				binding.pager.setCurrentItem(2, false);
+				setTabSwipeEnabled(true);
+				return true;
+			}
+			if (id == R.id.nav_files) {
+				binding.pager.setCurrentItem(3, false);
+				setTabSwipeEnabled(false);
+				return true;
+			}
+			if (id == R.id.nav_settings) { binding.pager.setCurrentItem(4, false); return true; }
 			return false;
 		});
 
@@ -191,8 +204,17 @@ public class MainActivity extends FragmentActivity {
 			@Override
 			public void onPageSelected(int position) {
 				binding.bottomNav.getMenu().getItem(position).setChecked(true);
+				if (position == 3) setTabSwipeEnabled(false);
+				else if (position == 2 && StoreFragment.isDetailOpen()) setTabSwipeEnabled(false);
+				else setTabSwipeEnabled(true);
 			}
 		});
+	}
+
+
+	public static void setTabSwipeEnabled(boolean enabled) {
+		if (instance == null || instance.binding == null) return;
+		instance.binding.pager.setUserInputEnabled(enabled);
 	}
 
 	public void showCurrentModTab() {
@@ -215,16 +237,20 @@ public class MainActivity extends FragmentActivity {
 	}
 
 	// Previous crash check!
-	// TODO: Add exporting of crash log
 	private void checkPreviousCrash() {
-		File crashLog = new File(getFilesDir(), "last_crash.log");
-		if (!crashLog.exists() || crashLog.length() == 0) return;
+		File crashLog = AppLog.crashLogFile(this);
+		if (!crashLog.exists() || crashLog.length() == 0) {
+			File legacy = new File(getFilesDir(), "last_crash.log");
+			if (legacy.exists() && legacy.length() > 0) crashLog = legacy;
+			else return;
+		}
+		File finalLog = crashLog;
 		Util.alert(this, "Oops, the launcher crashed.",
-			"A previous session ended with a native crash.\n\nCopy the log or dismiss.",
+			"A previous session ended with a native crash.\n\nLog: " + finalLog.getName(),
 			"Copy Log", () -> {
 				try {
-					byte[] data = new byte[(int) crashLog.length()];
-					try (java.io.FileInputStream fis = new java.io.FileInputStream(crashLog)) {
+					byte[] data = new byte[(int) finalLog.length()];
+					try (java.io.FileInputStream fis = new java.io.FileInputStream(finalLog)) {
 						fis.read(data);
 					}
 					String content = new String(data, StandardCharsets.UTF_8);
@@ -235,7 +261,7 @@ public class MainActivity extends FragmentActivity {
 					Toast.makeText(this, "Failed to copy log", Toast.LENGTH_SHORT).show();
 				}
 			},
-			"Dismiss", crashLog::delete);
+			"Dismiss", finalLog::delete);
 	}
 
 	private void showErrorDialog(Exception e) {
@@ -257,6 +283,8 @@ public class MainActivity extends FragmentActivity {
 	@SuppressLint("UnsafeDynamicallyLoadedCode")
 	private void startGame() {
 		if (targetApkPath == null) return;
+		AppLog.noteMod(Launcher.currentMod());
+		AppLog.i(TAG, "starting game abi=" + getAbi());
 
 		// library dir.
 		File libDir = getExtractedPath();

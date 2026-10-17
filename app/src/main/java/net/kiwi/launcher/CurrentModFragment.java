@@ -1,11 +1,16 @@
 package net.kiwi.launcher;
 
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -15,12 +20,18 @@ import androidx.fragment.app.Fragment;
 
 import net.kiwi.launcher.databinding.FragmentCurrentModBinding;
 
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class CurrentModFragment extends Fragment {
 
 	private FragmentCurrentModBinding binding;
 	private ModManager.ModInfo mod;
+	private final Handler main = new Handler(Looper.getMainLooper());
+	private final ConcurrentHashMap<String, Bitmap> imgCache = new ConcurrentHashMap<>();
 
 	@Nullable
 	@Override
@@ -60,8 +71,38 @@ public class CurrentModFragment extends Fragment {
 		binding.content.setVisibility(View.VISIBLE);
 		binding.name.setText(mod.name != null ? mod.name : mod.id);
 		binding.version.setText(mod.version != null ? "v" + mod.version : "");
+		File icon = mod.iconFile();
+		if (icon != null) {
+			binding.icon.setImageBitmap(BitmapFactory.decodeFile(icon.getAbsolutePath()));
+		} else {
+			binding.icon.setImageResource(R.drawable.ic_mods);
+		}
 		String desc = mod.description != null && !mod.description.isEmpty() ? mod.description : "No description";
-		Markdown.set(binding.description, desc);
+		Markdown.set(binding.description, desc, this::loadRemoteImage);
+	}
+
+	private void loadRemoteImage(String url, ImageView target) {
+		if (url == null || url.isEmpty() || target == null) return;
+		Bitmap cached = imgCache.get(url);
+		if (cached != null && !cached.isRecycled()) {
+			target.setImageBitmap(cached);
+			return;
+		}
+		new Thread(() -> {
+			try {
+				HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+				conn.setConnectTimeout(8000);
+				conn.setReadTimeout(8000);
+				conn.setInstanceFollowRedirects(true);
+				conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+				if (conn.getResponseCode() != 200) return;
+				Bitmap bmp = BitmapFactory.decodeStream(new BufferedInputStream(conn.getInputStream()));
+				if (bmp != null) {
+					imgCache.put(url, bmp);
+					main.post(() -> target.setImageBitmap(bmp));
+				}
+			} catch (Exception ignored) {}
+		}).start();
 	}
 
 	private void launch() {

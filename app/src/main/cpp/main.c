@@ -9,6 +9,7 @@
 #define LOG_TAG "LauncherMain"
 
 #include "ml/ml.h"
+#include "lua_trace.h"
 
 extern void init_API();
 
@@ -25,6 +26,7 @@ Java_net_kiwi_launcher_MainActivity_loadHooks(JNIEnv *env, jclass clazz) {
 JNIEXPORT void JNICALL
 Java_net_kiwi_launcher_MainActivity_onModExit(JNIEnv *env, jclass clazz) {
 	ML_exit();
+	lua_trace_clear();
 }
 
 JNIEXPORT void JNICALL
