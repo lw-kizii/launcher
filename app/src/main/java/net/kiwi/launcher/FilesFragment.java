@@ -455,9 +455,4 @@ public class FilesFragment extends Fragment {
 		}
 	}
 
-	/*
-	TODO:
-		- Add global permissions such as allow_networking...
-		- Add clear cache
-	 */
 }
