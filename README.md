@@ -35,6 +35,3 @@ The launcher is under the GPL-3 license, read about it more [here](https://githu
 > MIT License
 >
 > https://github.com/XMDS/GlossHook
-
-# Contributors
-- **Raijin**: Contributed ANGLE graphics backend integration, post-processing shader infrastructure (`shader.c`, `shader.h`), multi-pass godray support, and renderer selection settings.
