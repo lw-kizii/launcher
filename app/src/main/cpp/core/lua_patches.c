@@ -47,7 +47,7 @@ HOOK_SYMBOL(
 	}
 
 	/* String missing or empty → do not load any code */
-	LOGI("LoadIntoState: String empty/absent – skipping load (ignoring Bytes)");
+	LOGI("LoadIntoState: String empty/absent - skipping load (ignoring Bytes)");
 	return 0;
 }
 

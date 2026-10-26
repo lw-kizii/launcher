@@ -74,6 +74,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         api/overlay/seekbar.c
         api/overlay/textinput.c
 
+        api/shader.c
         api/main.c
 
         # Entrypoint
@@ -104,4 +105,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         GlossHook
         z
         android
-        log)
+        log
+        EGL
+        GLESv2)

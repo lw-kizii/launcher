@@ -14,6 +14,7 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import com.touchfoo.swordigo.Native;
 
+import net.kiwi.launcher.MainActivity;
 import net.kiwi.launcher.SettingsFragment;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -28,6 +29,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         try {
+            Log.i(TAG, "GL_VERSION: " + gl.glGetString(GL10.GL_VERSION));
+            Log.i(TAG, "GL_RENDERER: " + gl.glGetString(GL10.GL_RENDERER));
+            Log.i(TAG, "GL_EXTENSIONS: " + gl.glGetString(GL10.GL_EXTENSIONS));
             requestRefreshRate();
 
             if (!applicationSetup) {
@@ -45,11 +49,6 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
         try {
-            gl.glViewport(0, 0, width, height);
-            gl.glMatrixMode(GL10.GL_PROJECTION);
-            gl.glLoadIdentity();
-            gl.glMatrixMode(GL10.GL_MODELVIEW);
-            gl.glLoadIdentity();
             boolean isPad = isTablet();
             int horizontalInset = getHorizontalCutoutInset();
             Native.setApplicationViewSize(width, height, isPad, horizontalInset, 0);
@@ -61,11 +60,11 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     @Override
     public void onDrawFrame(GL10 gl) {
         try {
-	        int targetFps = SettingsFragment.getFps();
+            int targetFps = SettingsFragment.getFps();
             double targetFrameTime = 1.0 / targetFps;
 
             double now = System.nanoTime() / 1_000_000_000.0;
-            if (prevTime != 0) {
+            if (prevTime != 0 && targetFps <= 60) {
                 double elapsed = now - prevTime;
                 if (elapsed < targetFrameTime) {
                     long sleepMs = (long) ((targetFrameTime - elapsed) * 1000.0);
@@ -86,6 +85,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 }
             }
             prevTime = now;
+
             Native.updateApplication(dt);
             Native.drawApplication();
         } catch (Throwable t) {
@@ -94,44 +94,50 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     }
 
     private void requestRefreshRate() {
-
         Activity activity = (Activity) Native.mainActivity;
         if (activity == null || activity.getWindow() == null) return;
-
-        int targetFps = 60;
-
-        try {
-            Window window = activity.getWindow();
-            Display display = window.getWindowManager().getDefaultDisplay();
-            Display.Mode currentMode = display.getMode();
-            Display.Mode[] modes = display.getSupportedModes();
-
-            if (modes == null || modes.length == 0) return;
-
-            int curWidth  = currentMode.getPhysicalWidth();
-            int curHeight = currentMode.getPhysicalHeight();
-
-            Display.Mode best = null;
-            float minDiff = Float.MAX_VALUE;
-
-            for (Display.Mode m : modes) {
-                if (m.getPhysicalWidth() == curWidth && m.getPhysicalHeight() == curHeight) {
-                    float diff = Math.abs(m.getRefreshRate() - targetFps);
-                    if (diff < minDiff) {
-                        best = m;
-                        minDiff = diff;
+        int targetFps = SettingsFragment.getFps();
+        activity.runOnUiThread(() -> {
+            try {
+                Window window = activity.getWindow();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    WindowManager.LayoutParams params = window.getAttributes();
+                    params.preferredRefreshRate = targetFps;
+                    window.setAttributes(params);
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        if (GameView.instance != null && GameView.instance.getHolder() != null && GameView.instance.getHolder().getSurface() != null) {
+                            GameView.instance.getHolder().getSurface().setFrameRate((float) targetFps, android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT);
+                        }
+                    } catch (Throwable ignored) {}
+                }
+                Display display = window.getWindowManager().getDefaultDisplay();
+                Display.Mode currentMode = display.getMode();
+                Display.Mode[] modes = display.getSupportedModes();
+                if (modes == null || modes.length == 0) return;
+                int curWidth  = currentMode.getPhysicalWidth();
+                int curHeight = currentMode.getPhysicalHeight();
+                Display.Mode best = null;
+                float minDiff = Float.MAX_VALUE;
+                for (Display.Mode m : modes) {
+                    if (m.getPhysicalWidth() == curWidth && m.getPhysicalHeight() == curHeight) {
+                        float diff = Math.abs(m.getRefreshRate() - targetFps);
+                        if (diff < minDiff) {
+                            best = m;
+                            minDiff = diff;
+                        }
                     }
                 }
+                if (best != null) {
+                    WindowManager.LayoutParams params = window.getAttributes();
+                    params.preferredDisplayModeId = best.getModeId();
+                    window.setAttributes(params);
+                }
+            } catch (Throwable t) {
+                Log.e(TAG, "Failed to request refresh rate", t);
             }
-
-            if (best != null) {
-                WindowManager.LayoutParams params = window.getAttributes();
-                params.preferredDisplayModeId = best.getModeId();
-                window.setAttributes(params);
-            }
-        } catch (Throwable t) {
-            Log.e(TAG, "Failed to request refresh rate", t);
-        }
+        });
     }
 
     private boolean isTablet() {
