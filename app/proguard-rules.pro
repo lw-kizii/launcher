@@ -1,3 +1,4 @@
 -keep class com.touchfoo.swordigo.** { *; }
+-keep class com.L.SwordigoRuntime.** { *; }
 -keep class net.kiwi.launcher.** { *; }
 -keep class net.kiwi.overlay.** { *; }

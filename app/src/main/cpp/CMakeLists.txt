@@ -99,6 +99,8 @@ set_target_properties(
         ${CMAKE_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libGlossHook.so
 )
 
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE "-Wl,-z,max-page-size=16384")
+
 # Gloss, Android and LOGD marco
 target_link_libraries(${CMAKE_PROJECT_NAME}
         # List libraries link to the target library
