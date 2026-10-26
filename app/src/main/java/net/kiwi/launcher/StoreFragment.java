@@ -509,7 +509,7 @@ public class StoreFragment extends Fragment {
 			h.b.name.setText(e.name);
 			h.b.desc.setText(e.description != null ? e.description : "");
 			if (e.downloads >= 0) h.b.downloads.setText(StoreFragment.formatCount(e.downloads));
-			else h.b.downloads.setText("—");
+			else h.b.downloads.setText("0");
 			setInstallingUi(h.b, e.installing, e.installing ? h.b.progressBar.getProgress() : 0);
 			h.b.icon.setImageResource(R.drawable.ic_store);
 			loadIcon(e.iconUrl, bmp -> {

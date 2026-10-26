@@ -4,8 +4,11 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -85,7 +88,18 @@ public class SettingsFragment extends Fragment {
 	public static int g_fps = 60;
 
 	public static int getFps() {
+		Activity act = MainActivity.getCurrentActivity();
+		if (act != null) {
+			return act.getSharedPreferences("fps", 0).getInt("fps", 60);
+		}
 		return g_fps;
+	}
+
+	public static void applyAngle(Context ctx, boolean angle) {
+		try {
+			Settings.Global.putString(ctx.getContentResolver(), "angle_gl_driver_selection_pkgs", ctx.getPackageName());
+			Settings.Global.putString(ctx.getContentResolver(), "angle_gl_driver_selection_values", angle ? "angle" : "default");
+		} catch (Throwable ignored) {}
 	}
 
 	void handleButtons(Button f30, Button f60, Button f90, Button f120, Button f180) {
@@ -122,6 +136,61 @@ public class SettingsFragment extends Fragment {
 		}
 	}
 
+	void handleRenderer(FragmentSettingsBinding b) {
+		SharedPreferences prefs = requireContext().getSharedPreferences("settings", Context.MODE_PRIVATE);
+		Runnable update = () -> {
+			boolean isAngle = "angle".equalsIgnoreCase(prefs.getString("renderer", "default"));
+			b.rendererDefault.setTextColor(isAngle ? 0xffffffff : 0xff00ff00);
+			b.rendererAngle.setTextColor(isAngle ? 0xff00ff00 : 0xffffffff);
+			updateDetails(b);
+		};
+		update.run();
+		b.rendererDefault.setOnClickListener(v -> {
+			prefs.edit().putString("renderer", "default").apply();
+			applyAngle(requireContext(), false);
+			update.run();
+		});
+		b.rendererAngle.setOnClickListener(v -> {
+			prefs.edit().putString("renderer", "angle").apply();
+			applyAngle(requireContext(), true);
+			update.run();
+		});
+	}
+
+	void updateDetails(FragmentSettingsBinding b) {
+		Context ctx = getContext();
+		if (ctx == null) return;
+		SharedPreferences prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE);
+		boolean isAngle = "angle".equalsIgnoreCase(prefs.getString("renderer", "default"));
+
+		String ver = "v9.0 (90)";
+		try {
+			PackageInfo myInfo = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
+			ver = "v" + myInfo.versionName + " (" + myInfo.versionCode + ")";
+		} catch (Exception ignored) {}
+
+		b.detailLauncherVersion.setText("Launcher: Kiwi Launcher " + ver);
+		b.detailAbi.setText("ABI: " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "unknown"));
+		b.detailDevice.setText("Device: " + Build.MANUFACTURER + " " + Build.MODEL + " (Android " + Build.VERSION.RELEASE + ", API " + Build.VERSION.SDK_INT + ")");
+		b.detailRenderer.setText("Renderer: " + (isAngle ? "ANGLE (Vulkan)" : "Default (OpenGL ES)"));
+
+		String modId = MainActivity.currentMod();
+		File modDir = (modId != null && !modId.isEmpty()) ? new File(ctx.getExternalFilesDir(null), "mods/" + modId) : null;
+		boolean hasShader = modDir != null && (new File(modDir, "resources/shader.glsl").exists() || new File(modDir, "resources/shaders/shader.glsl").exists() || new File(modDir, "shaders/shader.glsl").exists() || new File(modDir, "shader.glsl").exists());
+		String shaderDetail = "Mod Shaders: None";
+		if (hasShader) {
+			shaderDetail = "Mod Shaders: Active (" + modId + (isAngle ? "" : ", Requires ANGLE") + ")";
+		}
+		b.detailShaders.setText(shaderDetail);
+
+		String swordigoStatus = "Swordigo: Not Installed";
+		try {
+			PackageInfo pi = ctx.getPackageManager().getPackageInfo("com.touchfoo.swordigo", 0);
+			swordigoStatus = "Swordigo: Installed (v" + pi.versionName + ")";
+		} catch (Exception ignored) {}
+		b.detailSwordigo.setText(swordigoStatus);
+	}
+
 	private static boolean deleteRecursive(File fileOrDirectory) {
 		if (fileOrDirectory != null && fileOrDirectory.exists()) {
 			if (fileOrDirectory.isDirectory()) {
@@ -137,7 +206,7 @@ public class SettingsFragment extends Fragment {
 		return false;
 	}
 
-	void handleGlobalAssets(Button clear, Button imp) {
+	void handleGlobalAssets(Button clear) {
 		Activity act = MainActivity.getCurrentActivity();
 		File extFiles = act.getExternalFilesDir(null);
 		clear.setOnClickListener(l -> {
@@ -147,12 +216,6 @@ public class SettingsFragment extends Fragment {
 				Toast.makeText(act, "Cleared global assets.", Toast.LENGTH_SHORT).show();
 				Log.d("SettingsFragment", "Refreshed global resources");
 			}
-		});
-		imp.setOnClickListener(l -> {
-			Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-			intent.addCategory(Intent.CATEGORY_OPENABLE);
-			intent.setType("*/*");
-			startActivityForResult(intent, 10001);
 		});
 	}
 
@@ -194,7 +257,8 @@ public class SettingsFragment extends Fragment {
 		FragmentSettingsBinding binding = FragmentSettingsBinding.inflate(inflater, container, false);
 
 		handleButtons(binding.fps30, binding.fps60, binding.fps90, binding.fps120, binding.fps180);
-		handleGlobalAssets(binding.gaClear, binding.gaImport);
+		handleRenderer(binding);
+		handleGlobalAssets(binding.gaClear);
 
 		binding.discordbtn.setOnClickListener(l -> {
 			// I don't trust Native.openUrl...

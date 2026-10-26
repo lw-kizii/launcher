@@ -13,4 +13,9 @@
     <string name="fps_90">90</string>
     <string name="fps_120">120</string>
     <string name="fps_180">180</string>
+    <string name="renderer_title">Renderer</string>
+    <string name="renderer_desc">Select graphics backend for rendering</string>
+    <string name="renderer_default">Default</string>
+    <string name="renderer_angle">ANGLE</string>
+    <string name="launcher_details_title">Kiwi Launcher Details</string>
 </resources>

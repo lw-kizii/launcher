@@ -15,6 +15,7 @@ extern void API_register_mini(lua_State *L);
 extern void API_register_io(lua_State *L);
 extern void API_register_fs(lua_State *L);
 extern void API_register_os(lua_State *L);
+extern void API_register_shader(lua_State *L);
 
 static void lua_call_hook(lua_State *L, lua_Debug *ar) {
 	if (!ar || ar->event != LUA_HOOKCALL) return;
@@ -46,6 +47,7 @@ HOOK_SYMBOL(
 	API_register_io(L);
 	API_register_fs(L);
 	API_register_os(L);
+	API_register_shader(L);
 
 	if (lua_sethook && lua_getinfo)
 		lua_sethook(L, lua_call_hook, LUA_MASKCALL, 0);

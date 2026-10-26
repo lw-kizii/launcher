@@ -10,6 +10,7 @@ import android.app.Activity;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.res.AssetManager;
+import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -131,8 +132,23 @@ public class MainActivity extends FragmentActivity {
 
 		prepareSwordigo();
 
+		String curRenderer = getSharedPreferences("settings", Context.MODE_PRIVATE).getString("renderer", "default");
+		SettingsFragment.applyAngle(this, "angle".equalsIgnoreCase(curRenderer));
+
 		// Launcher updates
 		checkForUpdate();
+
+		if ("launch".equals(getIntent().getStringExtra("action"))) {
+			launch();
+		}
+	}
+
+	@Override
+	protected void onNewIntent(Intent intent) {
+		super.onNewIntent(intent);
+		if ("launch".equals(intent.getStringExtra("action"))) {
+			launch();
+		}
 	}
 
 	@SuppressLint("UnsafeDynamicallyLoadedCode")
@@ -293,7 +309,6 @@ public class MainActivity extends FragmentActivity {
 		System.load(new File(libDir, "libopenal-soft.so").getAbsolutePath());
 		System.load(new File(libDir, "libswordigo.so").getAbsolutePath());
 		loadHooks();
-		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
 		FrameLayout gameRoot = new FrameLayout(this);
 		gameRoot.setLayoutParams(
@@ -304,8 +319,19 @@ public class MainActivity extends FragmentActivity {
 		);
 
 		glSurfaceView = new GameView(this);
-		glSurfaceView.setEGLConfigChooser(5, 6, 5, 0, 16, 0);
-		glSurfaceView.setPreserveEGLContextOnPause(true);
+		String rendererExtra = getIntent().getStringExtra("renderer");
+		if (rendererExtra != null) {
+			getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putString("renderer", rendererExtra).apply();
+		}
+		String renderer = getSharedPreferences("settings", Context.MODE_PRIVATE).getString("renderer", "default");
+		SettingsFragment.applyAngle(this, "angle".equalsIgnoreCase(renderer));
+		if ("angle".equalsIgnoreCase(renderer)) {
+			glSurfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0);
+			glSurfaceView.setPreserveEGLContextOnPause(true);
+		} else {
+			glSurfaceView.setEGLConfigChooser(5, 6, 5, 0, 16, 0);
+			glSurfaceView.setPreserveEGLContextOnPause(true);
+		}
 		glSurfaceView.setRenderer(new GameRenderer());
 		gameRoot.addView(glSurfaceView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -323,6 +349,17 @@ public class MainActivity extends FragmentActivity {
 		hooksLoaded = true;
 	}
 
+	private boolean pendingLaunch = false;
+
+	@Override
+	public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		if (pendingLaunch && newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+			pendingLaunch = false;
+			startGame();
+		}
+	}
+
 	public static void launch() {
 		if (instance == null) return;
 
@@ -331,7 +368,12 @@ public class MainActivity extends FragmentActivity {
 			return;
 		}
 
-		instance.startGame();
+		if (instance.getResources().getConfiguration().orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+			instance.pendingLaunch = true;
+			instance.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+		} else {
+			instance.startGame();
+		}
 	}
 
 	// Call native onModExit to clean up after a mod
