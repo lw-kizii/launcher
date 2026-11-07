@@ -10,9 +10,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <sys/stat.h>
 #include <jni.h>
 #include <sys/types.h>
-#include "lua_trace.h"
+#include <sys/system_properties.h>
 #include "java.h"
 #define LOG_TAG "NativeCrashCatcher"
 #if defined(__arm__)
@@ -164,10 +165,21 @@ static void native_crash_handler(int sig, siginfo_t *info, void *context) {
 	log_both(fd, "ABI: unknown");
 #endif
 	{
+		char sdk_ver[PROP_VALUE_MAX] = {0};
+		char os_ver[PROP_VALUE_MAX] = {0};
+		char model[PROP_VALUE_MAX] = {0};
+		char manufacturer[PROP_VALUE_MAX] = {0};
+		__system_property_get("ro.build.version.sdk", sdk_ver);
+		__system_property_get("ro.build.version.release", os_ver);
+		__system_property_get("ro.product.model", model);
+		__system_property_get("ro.product.manufacturer", manufacturer);
+		log_both(fd, "Device: %s %s", manufacturer, model);
+		log_both(fd, "Android: %s (API %s)", os_ver, sdk_ver);
+	}
+	{
 		const char *mod = java_current_mod_id_safe();
 		log_both(fd, "Mod: %s", (mod && mod[0]) ? mod : "(vanilla)");
 	}
-	lua_trace_dump_fd(fd);
 	log_both(fd, "signal %d (%s), code %d, fault addr %p", sig, strsignal(sig), info->si_code, info->si_addr);
 	log_both(fd, "\tpc  %016zx  lr  %016zx  sp  %016zx", pc, lr, sp);
 	dump_registers(fd, uc);
@@ -202,28 +214,19 @@ void init_crasher(void) {
 	sigemptyset(&sa.sa_mask);
 	int signals[] = {SIGSEGV, SIGABRT, SIGILL, SIGFPE, SIGBUS};
 	for (int i = 0; i < (int)(sizeof(signals) / sizeof(signals[0])); i++) sigaction(signals[i], &sa, &g_old_sa[signals[i]]);
-	LOGI("Crash handler installed!");
+
+	const char *ext = java_external_files();
+	if (ext && ext[0]) {
+		char logs_dir[512];
+		snprintf(logs_dir, sizeof(logs_dir), "%s/logs", ext);
+		mkdir(logs_dir, 0755);
+		snprintf(g_crash_log_path, sizeof(g_crash_log_path), "%s/last_crash.log", logs_dir);
+	} else {
+		const char *int_files = java_internal_files();
+		if (int_files && int_files[0]) {
+			snprintf(g_crash_log_path, sizeof(g_crash_log_path), "%s/last_crash.log", int_files);
+		}
+	}
+	LOGI("Crash handler installed! Path: %s", g_crash_log_path);
 }
 
-// MainActivity.setCrashLogPath
-void set_crash_log_path(const char *path) {
-	if (!path) {
-		g_crash_log_path[0] = '\0';
-		return;
-	}
-	strncpy(g_crash_log_path, path, sizeof(g_crash_log_path) - 1);
-	g_crash_log_path[sizeof(g_crash_log_path) - 1] = '\0';
-	LOGI("Crash log path set to %s", g_crash_log_path);
-}
-
-JNIEXPORT void JNICALL
-Java_net_kiwi_launcher_MainActivity_setCrashLogPath(JNIEnv *env, jclass clazz, jstring path) {
-	(void)clazz; // Not necessary.
-	if (!path) {
-		set_crash_log_path(NULL);
-		return;
-	}
-	const char *crash_path = (*env)->GetStringUTFChars(env, path, NULL);
-	set_crash_log_path(crash_path);
-	(*env)->ReleaseStringUTFChars(env, path, crash_path);
-}
