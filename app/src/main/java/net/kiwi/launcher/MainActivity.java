@@ -81,8 +81,6 @@ public class MainActivity extends FragmentActivity {
 	public static native void loadHooks();
 	// main.c, used to unload assets, hooks, etc.
 	public static native void onModExit();
-	// crasher.c, for the native crash catcher ^^
-	public static native void setCrashLogPath(String path);
 
 	//! Get the primary abi
 	public static String getAbi() {
@@ -120,11 +118,6 @@ public class MainActivity extends FragmentActivity {
 
 		// Load the launcher library.
 		System.loadLibrary("launcher");
-		// crash log path!
-		try {
-			AppLog.init(this);
-			setCrashLogPath(AppLog.crashLogFile(this).getAbsolutePath());
-		} catch (Throwable ignored) {}
 
 		// UI, Previous Crash
 		showLauncherUi();
@@ -254,7 +247,9 @@ public class MainActivity extends FragmentActivity {
 
 	// Previous crash check!
 	private void checkPreviousCrash() {
-		File crashLog = AppLog.crashLogFile(this);
+		File base = getExternalFilesDir(null);
+		if (base == null) base = getFilesDir();
+		File crashLog = new File(new File(base, "logs"), "last_crash.log");
 		if (!crashLog.exists() || crashLog.length() == 0) {
 			File legacy = new File(getFilesDir(), "last_crash.log");
 			if (legacy.exists() && legacy.length() > 0) crashLog = legacy;
@@ -299,8 +294,9 @@ public class MainActivity extends FragmentActivity {
 	@SuppressLint("UnsafeDynamicallyLoadedCode")
 	private void startGame() {
 		if (targetApkPath == null) return;
-		AppLog.noteMod(Launcher.currentMod());
-		AppLog.i(TAG, "starting game abi=" + getAbi());
+		String m = Launcher.currentMod();
+		Log.i("Mod", "active mod: " + (m != null && !m.isEmpty() ? m : "(vanilla)"));
+		Log.i(TAG, "starting game abi=" + getAbi());
 
 		// library dir.
 		File libDir = getExtractedPath();
