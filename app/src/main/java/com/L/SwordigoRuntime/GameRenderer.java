@@ -29,9 +29,6 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         try {
-            Log.i(TAG, "GL_VERSION: " + gl.glGetString(GL10.GL_VERSION));
-            Log.i(TAG, "GL_RENDERER: " + gl.glGetString(GL10.GL_RENDERER));
-            Log.i(TAG, "GL_EXTENSIONS: " + gl.glGetString(GL10.GL_EXTENSIONS));
             requestRefreshRate();
 
             if (!applicationSetup) {
@@ -53,7 +50,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             int horizontalInset = getHorizontalCutoutInset();
             Native.setApplicationViewSize(width, height, isPad, horizontalInset, 0);
         } catch (Throwable t) {
-            Log.e(TAG, "onSurfaceChanged failed", t);
+            Log.e(TAG, "onSurfaceChanged failed: ", t);
         }
     }
 
