@@ -4,6 +4,8 @@ import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.ClipData;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -254,7 +256,10 @@ public class FilesFragment extends Fragment {
 		if (kids != null) {
 			Arrays.sort(kids, (a, b) -> {
 				if (a.isDirectory() != b.isDirectory()) return a.isDirectory() ? -1 : 1;
-				return a.getName().compareToIgnoreCase(b.getName());
+				// Sort by date (ascending!)
+				long aMod = a.lastModified();
+				long bMod = b.lastModified();
+				return Long.compare(aMod, bMod);
 			});
 			entries.addAll(Arrays.asList(kids));
 		}
@@ -495,6 +500,24 @@ public class FilesFragment extends Fragment {
 		return String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0));
 	}
 
+	private static Bitmap loadThumbnail(File f) {
+		try {
+			BitmapFactory.Options opts = new BitmapFactory.Options();
+			opts.inJustDecodeBounds = true;
+			BitmapFactory.decodeFile(f.getAbsolutePath(), opts);
+			if (opts.outWidth <= 0 || opts.outHeight <= 0) return null;
+			int sample = 1;
+			while ((opts.outWidth / sample) > 128 || (opts.outHeight / sample) > 128) {
+				sample *= 2;
+			}
+			opts.inSampleSize = sample;
+			opts.inJustDecodeBounds = false;
+			return BitmapFactory.decodeFile(f.getAbsolutePath(), opts);
+		} catch (Throwable ignored) {
+			return null;
+		}
+	}
+
 	private class Adapter extends RecyclerView.Adapter<Adapter.VH> {
 		@NonNull
 		@Override
@@ -502,23 +525,41 @@ public class FilesFragment extends Fragment {
 			return new VH(ItemFileBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
 		}
 
+		@SuppressLint("SetTextI18n")
 		@Override
 		public void onBindViewHolder(@NonNull VH h, int position) {
 			File f = entries.get(position);
 			h.b.name.setText(f.getName());
 			h.b.name.setTextColor(COL_NAME);
+
 			if (f.isDirectory()) {
 				h.b.icon.setImageResource(R.drawable.ic_folder);
 				h.b.icon.setColorFilter(COL_FOLDER);
 				h.b.meta.setText("Folder");
 			} else {
-				h.b.icon.setImageResource(R.drawable.ic_file);
-				h.b.icon.setColorFilter(COL_FILE);
+				String name = f.getName().toLowerCase(Locale.ROOT);
+				if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".webp") || name.endsWith(".bmp") || name.endsWith(".gif")) {
+					Bitmap thumb = loadThumbnail(f);
+					if (thumb != null) {
+						h.b.icon.setColorFilter(null);
+						h.b.icon.setImageBitmap(thumb);
+					} else {
+						h.b.icon.setImageResource(R.drawable.ic_file);
+						h.b.icon.setColorFilter(COL_FILE);
+					}
+				} else if (name.endsWith(".log")) {
+					h.b.icon.setImageResource(R.drawable.ic_logcat);
+					h.b.icon.setColorFilter(null);
+				} else {
+					h.b.icon.setImageResource(R.drawable.ic_file);
+					h.b.icon.setColorFilter(COL_FILE);
+				}
 				String meta = formatSize(f.length());
 				long mod = f.lastModified();
-				if (mod > 0) meta += " · " + dateFmt.format(new Date(mod));
+				if (mod > 0) meta += " : " + dateFmt.format(new Date(mod));
 				h.b.meta.setText(meta);
 			}
+
 			h.itemView.setOnClickListener(v -> openEntry(f));
 			h.itemView.setOnTouchListener(new View.OnTouchListener() {
 				private final Runnable longPress = () -> {
@@ -526,6 +567,7 @@ public class FilesFragment extends Fragment {
 					showContextMenu(f);
 				};
 				private long downAt;
+
 				@Override
 				public boolean onTouch(View v, MotionEvent e) {
 					if (e.getAction() == MotionEvent.ACTION_DOWN) {
@@ -537,8 +579,7 @@ public class FilesFragment extends Fragment {
 					} else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) {
 						v.setPressed(false);
 						main.removeCallbacks(longPress);
-						if (e.getAction() == MotionEvent.ACTION_UP
-							&& SystemClock.uptimeMillis() - downAt < LONG_PRESS_MS) {
+						if (e.getAction() == MotionEvent.ACTION_UP && SystemClock.uptimeMillis() - downAt < LONG_PRESS_MS) {
 							v.performClick();
 						}
 					}
