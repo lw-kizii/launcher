@@ -2,7 +2,6 @@
 #include "hook.h"
 #include "log.h"
 #include "lua.h"
-#include "lua_trace.h"
 #include <stdbool.h>
 
 #define LOG_TAG "ProgramPatch"
@@ -72,7 +71,6 @@ HOOK_SYMBOL(
 		if (lua_gettop(L) > 0 && lua_isstring(L, -1)) {
 			const char *err = lua_tostring(L, -1);
 			LOGE("%p encountered error: %s", ps, err);
-			lua_trace_record(err ? err : "(lua error)");
 		}
 	}
 }
