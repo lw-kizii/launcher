@@ -41,7 +41,7 @@ FILE *ML_fetch_asset(String *asset) {
 		if (f) return f;
 	}
 
-	const char *modpath = java_resource_path(name);
+	const char *modpath = java_mod_resource_path(name);
 	FILE *f = fopen(modpath, "rb");
 	if (f) return f;
 
@@ -64,6 +64,6 @@ void ML_redirect_path(String *out, const char *orig) {
 	}
 	const char *base = ML_path_basename(orig);
 	char full[512];
-	snprintf(full, sizeof(full), "%s%s", java_resource_path("saves/"), base);
+	snprintf(full, sizeof(full), "%s%s", java_mod_resource_path("saves/"), base);
 	String_create(out, full);
 }

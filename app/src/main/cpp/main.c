@@ -17,7 +17,7 @@
 extern void init_API();
 
 JNIEXPORT void JNICALL
-Java_net_kiwi_launcher_MainActivity_loadHooks(JNIEnv *env, jclass clazz) {
+Java_net_kiwi_launcher_API_loadHooks(JNIEnv *env, jclass clazz) {
 	GlossInit(true);
 	init_crasher();
 	init_hooks();
@@ -28,11 +28,11 @@ Java_net_kiwi_launcher_MainActivity_loadHooks(JNIEnv *env, jclass clazz) {
 }
 
 JNIEXPORT void JNICALL
-Java_net_kiwi_launcher_MainActivity_onModExit(JNIEnv *env, jclass clazz) {
+Java_net_kiwi_launcher_API_onModExit(JNIEnv *env, jclass clazz) {
 	ML_exit();
 
 }
 
 JNIEXPORT void JNICALL
-Java_net_kiwi_launcher_MainActivity_init(JNIEnv *env, jclass clazz) {
+Java_net_kiwi_launcher_API_init(JNIEnv *env, jclass clazz) {
 }

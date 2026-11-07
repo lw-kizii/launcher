@@ -80,17 +80,7 @@ public class MainActivity extends FragmentActivity {
 	public static String getTargetApkPath() { return instance != null ? instance.targetApkPath : null; }
 
 
-	// Native Methods!
 
-	// main.c
-	public static native void init();
-	// java.c
-	public static native void initPaths(String internalFiles, String internalCache, String externalFiles);
-
-	// main.c, used to load hooks!
-	public static native void loadHooks();
-	// main.c, used to unload assets, hooks, etc.
-	public static native void onModExit();
 
 	//! Get the primary abi
 	public static String getAbi() {
@@ -168,8 +158,8 @@ public class MainActivity extends FragmentActivity {
 			extractLibFromZip(targetApkPaths, "lib/" + abi + "/libswordigo.so", swordigoFile);
 			swordigoReady = true;
 			File ext = getExternalFilesDir(null);
-			initPaths(getFilesDir().getAbsolutePath(), getCacheDir().getAbsolutePath(), ext != null ? ext.getAbsolutePath() : "");
-			init();
+			API.initPaths(getFilesDir().getAbsolutePath(), getCacheDir().getAbsolutePath(), ext != null ? ext.getAbsolutePath() : "");
+			API.init();
 		} catch (Exception e) {
 			Log.e(TAG, "prepareSwordigo failed", e);
 			swordigoReady = false;
@@ -314,7 +304,7 @@ public class MainActivity extends FragmentActivity {
 		// Load the libraries nicely...
 		System.load(new File(libDir, "libopenal-soft.so").getAbsolutePath());
 		System.load(new File(libDir, "libswordigo.so").getAbsolutePath());
-		loadHooks();
+		API.loadHooks();
 
 		FrameLayout gameRoot = new FrameLayout(this);
 		gameRoot.setLayoutParams(
@@ -385,7 +375,7 @@ public class MainActivity extends FragmentActivity {
 	// Call native onModExit to clean up after a mod
 	private void unloadGameHooks() {
 		if (!hooksLoaded) return;
-		try { onModExit(); } catch (Throwable t) {
+		try { API.onModExit(); } catch (Throwable t) {
 			Log.e(TAG, "onModExit failed", t);
 		} finally {
 			hooksLoaded = false;

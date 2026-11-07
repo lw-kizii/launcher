@@ -16,7 +16,7 @@ HOOK_SYMBOL(
 	LOGD("GetFilesWithExtension ext=%s path=%s", ext, p);
 	const char *id = java_current_mod_id();
 	if (id && *id && ML_is_save_ext(ext)) {
-		const char *savesdir = java_resource_path("saves/");
+		const char *savesdir = java_mod_resource_path("saves/");
 		ML_ensure_dir(savesdir);
 		String modpath;
 		String_create(&modpath, savesdir);
@@ -56,8 +56,8 @@ HOOK_SYMBOL(
 
 	const char *base = ML_path_basename(p);
 	char full[512];
-	snprintf(full, sizeof(full), "%s%s", java_resource_path("saves/"), base);
-	ML_ensure_dir(java_resource_path("saves/"));
+	snprintf(full, sizeof(full), "%s%s", java_mod_resource_path("saves/"), base);
+	ML_ensure_dir(java_mod_resource_path("saves/"));
 	LOGD("writing ourselves to %s", full);
 
 	FILE *f = fopen(full, "wb");
