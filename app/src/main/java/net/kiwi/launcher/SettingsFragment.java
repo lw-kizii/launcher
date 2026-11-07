@@ -1,5 +1,6 @@
 package net.kiwi.launcher;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -16,18 +17,17 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.pm.PackageInfoCompat;
 import androidx.fragment.app.Fragment;
 
-import com.touchfoo.swordigo.Native;
-
-import net.kiwi.launcher.databinding.FragmentModsBinding;
 import net.kiwi.launcher.databinding.FragmentSettingsBinding;
 
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -47,24 +47,19 @@ public class SettingsFragment extends Fragment {
 		}
 	}
 
-	// Simple helpers, should be moved to Util honestly
-	static void doNothing() {}
 	private static void ensureDir(File dir) {
-		if (dir != null && !dir.exists() && !dir.mkdirs() && !dir.isDirectory()) {
-			doNothing();
+		if (dir != null && !dir.exists()) {
+			dir.mkdirs();
 		}
 	}
+
 	private static void extractZip(Context context, Uri uri, File destDir) throws Exception {
 		try (InputStream is = context.getContentResolver().openInputStream(uri)) {
 			if (is == null) throw new IOException("could not open file");
 			inflateZip(is, destDir);
 		}
 	}
-	private static void extractZipFile(File zipFile, File destDir) throws Exception {
-		try (InputStream is = new FileInputStream(zipFile)) {
-			inflateZip(is, destDir);
-		}
-	}
+
 	private static void inflateZip(InputStream is, File destDir) throws Exception {
 		try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(is))) {
 			ZipEntry entry;
@@ -85,14 +80,12 @@ public class SettingsFragment extends Fragment {
 		}
 	}
 
-	public static int g_fps = 60;
-
 	public static int getFps() {
 		Activity act = MainActivity.getCurrentActivity();
 		if (act != null) {
 			return act.getSharedPreferences("fps", 0).getInt("fps", 60);
 		}
-		return g_fps;
+		return 60;
 	}
 
 	public static void applyAngle(Context ctx, boolean angle) {
@@ -102,25 +95,24 @@ public class SettingsFragment extends Fragment {
 		} catch (Throwable ignored) {}
 	}
 
-	void handleButtons(Button f30, Button f60, Button f90, Button f120, Button f180) {
+	private void handleButtons(Button f30, Button f60, Button f90, Button f120, Button f180) {
 		SharedPreferences prefs = requireContext().getSharedPreferences("fps", 0);
 		FPSHandle[] handles = {
 			new FPSHandle(f30, 30),
 			new FPSHandle(f60, 60),
 			new FPSHandle(f90, 90),
 			new FPSHandle(f120, 120),
-			new FPSHandle(f180, 180),
+			new FPSHandle(f180, 180)
 		};
 
 		Runnable updateBtns = () -> {
 			int currentFps = prefs.getInt("fps", 60);
 			for (FPSHandle handle : handles) {
 				if (currentFps == handle.fps) {
-					g_fps = handle.fps;
 					handle.btn.setTextColor(0xff00ff00);
 					continue;
 				}
-				handle.btn.setTextColor(0xffffffff); // white
+				handle.btn.setTextColor(0xffffffff);
 			}
 		};
 
@@ -136,13 +128,12 @@ public class SettingsFragment extends Fragment {
 		}
 	}
 
-	void handleRenderer(FragmentSettingsBinding b) {
+	private void handleRenderer(FragmentSettingsBinding b) {
 		SharedPreferences prefs = requireContext().getSharedPreferences("settings", Context.MODE_PRIVATE);
 		Runnable update = () -> {
 			boolean isAngle = "angle".equalsIgnoreCase(prefs.getString("renderer", "default"));
 			b.rendererDefault.setTextColor(isAngle ? 0xffffffff : 0xff00ff00);
 			b.rendererAngle.setTextColor(isAngle ? 0xff00ff00 : 0xffffffff);
-			updateDetails(b);
 		};
 		update.run();
 		b.rendererDefault.setOnClickListener(v -> {
@@ -157,31 +148,21 @@ public class SettingsFragment extends Fragment {
 		});
 	}
 
-	void updateDetails(FragmentSettingsBinding b) {
+	@SuppressLint("SetTextI18n")
+	private void updateDetails(FragmentSettingsBinding b) {
 		Context ctx = getContext();
 		if (ctx == null) return;
-		SharedPreferences prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE);
-		boolean isAngle = "angle".equalsIgnoreCase(prefs.getString("renderer", "default"));
 
-		String ver = "v9.0 (90)";
+		String ver = "??";
 		try {
 			PackageInfo myInfo = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
-			ver = "v" + myInfo.versionName + " (" + myInfo.versionCode + ")";
+			long vc = PackageInfoCompat.getLongVersionCode(myInfo);
+			ver = "v" + myInfo.versionName + " (" + vc + ")";
 		} catch (Exception ignored) {}
 
-		b.detailLauncherVersion.setText("Launcher: Kiwi Launcher " + ver);
-		b.detailAbi.setText("ABI: " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "unknown"));
+		b.detailLauncherVersion.setText("Kiwi Launcher Version: " + ver);
 		b.detailDevice.setText("Device: " + Build.MANUFACTURER + " " + Build.MODEL + " (Android " + Build.VERSION.RELEASE + ", API " + Build.VERSION.SDK_INT + ")");
-		b.detailRenderer.setText("Renderer: " + (isAngle ? "ANGLE (Vulkan)" : "Default (OpenGL ES)"));
-
-		String modId = MainActivity.currentMod();
-		File modDir = (modId != null && !modId.isEmpty()) ? new File(ctx.getExternalFilesDir(null), "mods/" + modId) : null;
-		boolean hasShader = modDir != null && (new File(modDir, "resources/shader.glsl").exists() || new File(modDir, "resources/shaders/shader.glsl").exists() || new File(modDir, "shaders/shader.glsl").exists() || new File(modDir, "shader.glsl").exists());
-		String shaderDetail = "Mod Shaders: None";
-		if (hasShader) {
-			shaderDetail = "Mod Shaders: Active (" + modId + (isAngle ? "" : ", Requires ANGLE") + ")";
-		}
-		b.detailShaders.setText(shaderDetail);
+		b.detailAbi.setText("ABI: " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "unknown"));
 
 		String swordigoStatus = "Swordigo: Not Installed";
 		try {
@@ -191,7 +172,7 @@ public class SettingsFragment extends Fragment {
 		b.detailSwordigo.setText(swordigoStatus);
 	}
 
-	private static boolean deleteRecursive(File fileOrDirectory) {
+	private static void deleteRecursive(File fileOrDirectory) {
 		if (fileOrDirectory != null && fileOrDirectory.exists()) {
 			if (fileOrDirectory.isDirectory()) {
 				File[] children = fileOrDirectory.listFiles();
@@ -201,15 +182,17 @@ public class SettingsFragment extends Fragment {
 					}
 				}
 			}
-			return fileOrDirectory.delete();
+			fileOrDirectory.delete();
 		}
-		return false;
 	}
 
-	void handleGlobalAssets(Button clear) {
+	private void handleGlobalAssets(Button importAssets, Button clearAssets) {
 		Activity act = MainActivity.getCurrentActivity();
 		File extFiles = act.getExternalFilesDir(null);
-		clear.setOnClickListener(l -> {
+
+		importAssets.setOnClickListener(l -> importPicker.launch(new String[]{"application/zip"}));
+
+		clearAssets.setOnClickListener(l -> {
 			File resourcesDir = new File(extFiles, "resources");
 			deleteRecursive(resourcesDir);
 			if (resourcesDir.mkdirs()) {
@@ -219,35 +202,24 @@ public class SettingsFragment extends Fragment {
 		});
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-		super.onActivityResult(requestCode, resultCode, data);
-		if (requestCode != 10001 || resultCode != android.app.Activity.RESULT_OK || data == null || data.getData() == null) return;
-		Uri uri = data.getData();
+	private final ActivityResultLauncher<String[]> importPicker = registerForActivityResult(
+		new ActivityResultContracts.OpenDocument(),
+		this::onImportPicked
+	);
+
+	private void onImportPicked(@Nullable Uri uri) {
+		if (uri == null) return;
 		String name = uri.getLastPathSegment();
 		if (name == null) name = "import";
+
 		name = name.toLowerCase(Locale.ROOT);
 		if (!name.endsWith(".zip")) return;
+
 		Activity act = MainActivity.getCurrentActivity();
 		try {
-			throw new RuntimeException();
-//			extractZip(MainActivity.getCurrentActivity(), uri,
-//				new File(act.getExternalFilesDir(null), "resources")
-//			);
+			extractZip(act, uri, new File(act.getExternalFilesDir(null), "resources"));
 		} catch (Exception e) {
-			Util.alert(
-				act,
-				"Failed to import assets",
-				String.valueOf(e),
-				"Okay", () -> {
-					Log.d("SettingsFragment", "Clicked on Okay");
-				},
-				"Report on Discord", () -> {
-					Toast.makeText(act, "Opening Discord...", Toast.LENGTH_SHORT).show();
-					Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://discord.gg/cF6Krcb28V"));
-					startActivity(intent);
-				}
-			);
+			Log.e("SettingsFragment", "Error while importing assets: ", e);
 		}
 	}
 
@@ -258,20 +230,14 @@ public class SettingsFragment extends Fragment {
 
 		handleButtons(binding.fps30, binding.fps60, binding.fps90, binding.fps120, binding.fps180);
 		handleRenderer(binding);
-		handleGlobalAssets(binding.gaClear);
+		handleGlobalAssets(binding.gaImport, binding.gaClear);
+		updateDetails(binding);
 
 		binding.discordbtn.setOnClickListener(l -> {
-			// I don't trust Native.openUrl...
 			Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://discord.gg/cF6Krcb28V"));
 			startActivity(intent);
 		});
 
 		return binding.getRoot();
 	}
-
-	/*
-	TODO:
-		- Add global permissions such as allow_networking...
-		- Add clear cache
-	 */
 }

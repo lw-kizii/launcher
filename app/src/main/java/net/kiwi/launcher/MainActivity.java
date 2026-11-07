@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.res.AssetManager;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
@@ -20,6 +21,7 @@ import android.widget.Toast;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
+import androidx.core.content.pm.PackageInfoCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
@@ -53,7 +55,6 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends FragmentActivity {
 
 	private static final String TAG = "Launcher";
-	private static final int Version = 90;
 
 	private static MainActivity instance;
 	private GameView glSurfaceView;
@@ -64,7 +65,16 @@ public class MainActivity extends FragmentActivity {
 	private ActivityMainBinding binding;
 	private static AssetManager gameAssetManager;
 
-	public static int getVersion() { return Version; }
+	// Better way of getting the version
+	public static int getVersion() {
+		if (instance != null) {
+			try {
+				PackageInfo pi = instance.getPackageManager().getPackageInfo(instance.getPackageName(), 0);
+				return (int) PackageInfoCompat.getLongVersionCode(pi);
+			} catch (Exception ignored) {}
+		}
+		return 0;
+	}
 	public static Activity getCurrentActivity() { return instance; }
 	public static String currentMod() { return Launcher.currentMod(); }
 	public static String getTargetApkPath() { return instance != null ? instance.targetApkPath : null; }
@@ -524,7 +534,7 @@ public class MainActivity extends FragmentActivity {
 				}
 				JSONObject o = new JSONObject(sb.toString().trim());
 				int remote = o.optInt("version", 0);
-				if (remote <= Version) return;
+				if (remote <= getVersion()) return;
 				String notes = o.optString("notes", "A new version is available.");
 				String url = o.optString("directUrl", o.optString("url", ""));
 				runOnUiThread(() -> Util.alert(this, "Update available", notes, "OK", () -> {
