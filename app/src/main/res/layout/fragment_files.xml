@@ -81,6 +81,16 @@
 				android:maxLines="1"
 				android:textColor="#BAC2DE"
 				android:textSize="12sp" />
+
+			<ImageButton
+				android:id="@+id/btn_import"
+				android:layout_width="40dp"
+				android:layout_height="40dp"
+				android:layout_marginStart="4dp"
+				android:background="?android:attr/selectableItemBackgroundBorderless"
+				android:contentDescription="@string/import_assets"
+				android:src="@drawable/ic_plus"
+				android:tint="#A6E3A1" />
 		</LinearLayout>
 
 		<androidx.recyclerview.widget.RecyclerView

@@ -1,5 +1,6 @@
 package net.kiwi.launcher;
 
+import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.ClipData;
 import android.content.Intent;
@@ -27,6 +28,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.FileProvider;
@@ -42,19 +45,22 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class FilesFragment extends Fragment {
 
 	private static final int COL_FOLDER = 0xFF57F287;
 	private static final int COL_FILE = 0xFF9CA3AF;
 	private static final int COL_NAME = 0xFFE8E6F2;
-	private static final long LONG_PRESS_MS = 280;
+	private static final long LONG_PRESS_MS = 200;
 
 	private FragmentFilesBinding binding;
 	private final List<File> entries = new ArrayList<>();
@@ -66,6 +72,8 @@ public class FilesFragment extends Fragment {
 	private OnBackPressedCallback backCallback;
 	private final Handler main = new Handler(Looper.getMainLooper());
 	private final SimpleDateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US);
+
+	private final ActivityResultLauncher<String[]> importPicker = registerForActivityResult(new ActivityResultContracts.OpenMultipleDocuments(), this::onImportPicked);
 
 	@Nullable
 	@Override
@@ -86,6 +94,7 @@ public class FilesFragment extends Fragment {
 		binding.tabInternal.setOnClickListener(v -> switchRoot(false));
 		binding.tabExternal.setOnClickListener(v -> switchRoot(true));
 		binding.btnUp.setOnClickListener(v -> goUp());
+		binding.btnImport.setOnClickListener(v -> importPicker.launch(new String[]{"*/*"}));
 		binding.btnCloseViewer.setOnClickListener(v -> hideViewer());
 
 		backCallback = new OnBackPressedCallback(false) {
@@ -122,6 +131,90 @@ public class FilesFragment extends Fragment {
 		refreshList();
 	}
 
+	private void onImportPicked(@Nullable List<Uri> uris) {
+		if (uris == null || uris.isEmpty() || current == null) return;
+		File targetDir = current;
+		new Thread(() -> {
+			int count = 0;
+			for (Uri uri : uris) { // Multiple resources!!
+				try {
+					String name = getUriFileName(uri);
+					if (name.toLowerCase(Locale.ROOT).endsWith(".zip")) { // Special case for zips ^^
+						handleZipImport(uri, targetDir);
+					} else {
+						handleFileImport(uri, name, targetDir);
+					}
+					count++;
+				} catch (Exception ignored) {}
+			}
+			int finalCount = count;
+			main.post(() -> {
+				refreshList();
+				if (getContext() != null) {
+					Toast.makeText(requireContext(), "Imported " + finalCount + " item(s)", Toast.LENGTH_SHORT).show();
+				}
+			});
+		}).start();
+	}
+
+	private String getUriFileName(Uri uri) {
+		String name = null;
+		if ("content".equals(uri.getScheme())) {
+			try (android.database.Cursor cursor = requireContext().getContentResolver().query(uri, null, null, null, null)) {
+				if (cursor != null && cursor.moveToFirst()) {
+					int idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+					if (idx != -1) name = cursor.getString(idx);
+				}
+			} catch (Exception ignored) {}
+		}
+		if (name == null) {
+			name = uri.getLastPathSegment();
+			if (name != null) {
+				int idx = name.lastIndexOf('/');
+				if (idx != -1) name = name.substring(idx + 1);
+			}
+		}
+		return name != null ? name : "imported_file";
+	}
+
+	@SuppressWarnings("ResultOfMethodCallIgnored")
+	private void handleZipImport(Uri uri, File destDir) throws Exception {
+		try (InputStream is = requireContext().getContentResolver().openInputStream(uri)) {
+			if (is == null) return;
+			try (ZipInputStream zis = new ZipInputStream(new java.io.BufferedInputStream(is))) {
+				ZipEntry entry;
+				while ((entry = zis.getNextEntry()) != null) {
+					String entryName = entry.getName();
+					if (entryName.contains("..")) continue;
+					File target = new File(destDir, entryName);
+					if (entry.isDirectory()) {
+						target.mkdirs();
+					} else {
+						File parent = target.getParentFile();
+						if (parent != null && !parent.exists()) parent.mkdirs();
+						try (FileOutputStream fos = new FileOutputStream(target)) {
+							byte[] buf = new byte[8192];
+							int n;
+							while ((n = zis.read(buf)) != -1) fos.write(buf, 0, n);
+						}
+					}
+					zis.closeEntry();
+				}
+			}
+		}
+	}
+
+	private void handleFileImport(Uri uri, String name, File destDir) throws Exception {
+		File target = new File(destDir, name);
+		try (InputStream is = requireContext().getContentResolver().openInputStream(uri);
+			 FileOutputStream fos = new FileOutputStream(target)) {
+			if (is == null) return;
+			byte[] buf = new byte[8192];
+			int n;
+			while ((n = is.read(buf)) != -1) fos.write(buf, 0, n);
+		}
+	}
+
 	private void updateTabs() {
 		if (binding == null) return;
 		binding.tabInternal.setTextColor(externalMode ? 0xFFBAC2DE : 0xFFCDD6F4);
@@ -146,7 +239,8 @@ public class FilesFragment extends Fragment {
 		}
 	}
 
-	private void refreshList() {
+	@SuppressLint({"NotifyDataSetChanged", "SetTextI18n"})
+    private void refreshList() {
 		if (binding == null || current == null) return;
 		File root = externalMode ? rootExternal : rootInternal;
 		String abs = current.getAbsolutePath();
@@ -176,7 +270,7 @@ public class FilesFragment extends Fragment {
 		}
 		String name = f.getName().toLowerCase(Locale.ROOT);
 		if (isTextName(name)) showViewer(f);
-		else Toast.makeText(requireContext(), formatSize(f.length()) + " · long-press to open", Toast.LENGTH_SHORT).show();
+		else Toast.makeText(requireContext(), formatSize(f.length()), Toast.LENGTH_SHORT).show();
 	}
 
 	private static boolean isTextName(String name) {
@@ -251,7 +345,8 @@ public class FilesFragment extends Fragment {
 		dialog.show();
 	}
 
-	private android.graphics.drawable.Drawable selectableBg() {
+	@SuppressLint("UseCompatLoadingForDrawables")
+    private android.graphics.drawable.Drawable selectableBg() {
 		android.util.TypedValue out = new android.util.TypedValue();
 		requireContext().getTheme().resolveAttribute(android.R.attr.selectableItemBackground, out, true);
 		return requireContext().getDrawable(out.resourceId);
@@ -342,7 +437,7 @@ public class FilesFragment extends Fragment {
 	private void showViewer(File f) {
 		if (binding == null) return;
 		binding.viewerTitle.setText(f.getName());
-		binding.viewerBody.setText("Loading…");
+		binding.viewerBody.setText(R.string.loading);
 		View panel = binding.viewerPanel;
 		panel.setVisibility(View.VISIBLE);
 		float w = panel.getWidth() > 0 ? panel.getWidth() : binding.getRoot().getWidth();
@@ -426,15 +521,21 @@ public class FilesFragment extends Fragment {
 			}
 			h.itemView.setOnClickListener(v -> openEntry(f));
 			h.itemView.setOnTouchListener(new View.OnTouchListener() {
-				private final Runnable longPress = () -> showContextMenu(f);
+				private final Runnable longPress = () -> {
+					h.itemView.setPressed(false);
+					showContextMenu(f);
+				};
 				private long downAt;
 				@Override
 				public boolean onTouch(View v, MotionEvent e) {
 					if (e.getAction() == MotionEvent.ACTION_DOWN) {
+						v.drawableHotspotChanged(e.getX(), e.getY());
+						v.setPressed(true);
 						downAt = SystemClock.uptimeMillis();
 						main.removeCallbacks(longPress);
 						main.postDelayed(longPress, LONG_PRESS_MS);
 					} else if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) {
+						v.setPressed(false);
 						main.removeCallbacks(longPress);
 						if (e.getAction() == MotionEvent.ACTION_UP
 							&& SystemClock.uptimeMillis() - downAt < LONG_PRESS_MS) {
