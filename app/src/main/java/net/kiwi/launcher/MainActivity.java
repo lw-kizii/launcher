@@ -8,7 +8,6 @@ import android.content.Intent;
 import android.net.Uri;
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.res.AssetManager;
 import android.opengl.GLSurfaceView;
@@ -34,14 +33,9 @@ import com.touchfoo.swordigo.Native;
 import net.kiwi.launcher.databinding.ActivityMainBinding;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Method;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 import org.json.JSONObject;
 
@@ -54,14 +48,10 @@ import java.nio.charset.StandardCharsets;
 @Keep
 public class MainActivity extends FragmentActivity {
 
-	private static final String TAG = "Launcher";
+	private static final String TAG = "LauncherMainActivity";
 
 	private static MainActivity instance;
 	private GameView glSurfaceView;
-	private String targetApkPath;
-	private String[] targetApkPaths;
-	private boolean hooksLoaded;
-	private boolean swordigoReady;
 	private ActivityMainBinding binding;
 	private static AssetManager gameAssetManager;
 
@@ -77,27 +67,16 @@ public class MainActivity extends FragmentActivity {
 	}
 	public static Activity getCurrentActivity() { return instance; }
 	public static String currentMod() { return Launcher.currentMod(); }
-	public static String getTargetApkPath() { return instance != null ? instance.targetApkPath : null; }
-
-
-
+	public static String getTargetApkPath() { return ModLoader.getTargetApkPath(); }
 
 	//! Get the primary abi
 	public static String getAbi() {
-		if (android.os.Build.SUPPORTED_ABIS.length > 0) {
-			String primary = android.os.Build.SUPPORTED_ABIS[0];
-			if ("arm64-v8a".equals(primary) || primary.contains("arm64")) return "arm64-v8a";
-		}
-		return "armeabi-v7a";
+		return ModLoader.getAbi();
 	}
 
 	// Get the extracted path of the libraries
 	public static File getExtractedPath() {
-		MainActivity act = instance;
-		if (act == null) return null;
-		File dir = new File(act.getFilesDir(), "Extracted/lib/" + getAbi());
-		if (!dir.exists() && !dir.mkdirs() && !dir.isDirectory()) Log.w(TAG, "extract dir failed");
-		return dir;
+		return instance != null ? ModLoader.getExtractedPath(instance) : null;
 	}
 
 	@Override
@@ -144,26 +123,11 @@ public class MainActivity extends FragmentActivity {
 		}
 	}
 
-	@SuppressLint("UnsafeDynamicallyLoadedCode")
 	private void prepareSwordigo() {
-		String abi = getAbi();
-		File libDir = getExtractedPath();
-		File openAlFile = new File(libDir, "libopenal-soft.so");
-		File swordigoFile = new File(libDir, "libswordigo.so");
 		try {
-			ApplicationInfo info = getPackageManager().getApplicationInfo("com.touchfoo.swordigo", 0);
-			targetApkPath = info.sourceDir;
-			targetApkPaths = collectApkPaths(info);
-			extractLibFromZip(targetApkPaths, "lib/" + abi + "/libopenal-soft.so", openAlFile);
-			extractLibFromZip(targetApkPaths, "lib/" + abi + "/libswordigo.so", swordigoFile);
-			swordigoReady = true;
-			File ext = getExternalFilesDir(null);
-			API.initPaths(getFilesDir().getAbsolutePath(), getCacheDir().getAbsolutePath(), ext != null ? ext.getAbsolutePath() : "");
-			API.init();
+			ModLoader.prepareSwordigo(this);
 		} catch (Exception e) {
 			Log.e(TAG, "prepareSwordigo failed", e);
-			swordigoReady = false;
-			targetApkPath = null;
 			runOnUiThread(() -> showErrorDialog(e));
 		}
 	}
@@ -220,7 +184,6 @@ public class MainActivity extends FragmentActivity {
 		});
 	}
 
-
 	public static void setTabSwipeEnabled(boolean enabled) {
 		if (instance == null || instance.binding == null) return;
 		instance.binding.pager.setUserInputEnabled(enabled);
@@ -231,18 +194,6 @@ public class MainActivity extends FragmentActivity {
 			binding.pager.setCurrentItem(0, true);
 			binding.bottomNav.getMenu().getItem(0).setChecked(true);
 		}
-	}
-
-	// APK Paths collector
-	// Takes in ApplicationInfo and returns paths
-	// I should probably move this to Util
-	private static String[] collectApkPaths(ApplicationInfo info) {
-		if (info.splitSourceDirs == null || info.splitSourceDirs.length == 0)
-			return new String[]{info.sourceDir};
-		String[] paths = new String[info.splitSourceDirs.length + 1];
-		paths[0] = info.sourceDir;
-		System.arraycopy(info.splitSourceDirs, 0, paths, 1, info.splitSourceDirs.length);
-		return paths;
 	}
 
 	// Previous crash check!
@@ -293,18 +244,12 @@ public class MainActivity extends FragmentActivity {
 
 	@SuppressLint("UnsafeDynamicallyLoadedCode")
 	private void startGame() {
-		if (targetApkPath == null) return;
+		if (ModLoader.getTargetApkPath() == null) return;
 		String m = Launcher.currentMod();
 		Log.i("Mod", "active mod: " + (m != null && !m.isEmpty() ? m : "(vanilla)"));
-		Log.i(TAG, "starting game abi=" + getAbi());
+		Log.i(TAG, "starting game abi=" + ModLoader.getAbi());
 
-		// library dir.
-		File libDir = getExtractedPath();
-
-		// Load the libraries nicely...
-		System.load(new File(libDir, "libopenal-soft.so").getAbsolutePath());
-		System.load(new File(libDir, "libswordigo.so").getAbsolutePath());
-		API.loadHooks();
+		ModLoader.loadGameLibraries(this);
 
 		FrameLayout gameRoot = new FrameLayout(this);
 		gameRoot.setLayoutParams(
@@ -338,11 +283,10 @@ public class MainActivity extends FragmentActivity {
 		net.kiwi.overlay.Controller.init(this, gameRoot); // net/kiwi/overlay
 
 		// Native Environment Setup
-		setupNativeEnvironment(targetApkPath);
+		setupNativeEnvironment(ModLoader.getTargetApkPath());
 
 		// gearButton (for closing the mod)
 		Launcher.initGameButtons(this);
-		hooksLoaded = true;
 	}
 
 	private boolean pendingLaunch = false;
@@ -359,7 +303,7 @@ public class MainActivity extends FragmentActivity {
 	public static void launch() {
 		if (instance == null) return;
 
-		if (!instance.swordigoReady || instance.targetApkPath == null) {
+		if (!ModLoader.isSwordigoReady() || ModLoader.getTargetApkPath() == null) {
 			instance.runOnUiThread(() -> Toast.makeText(instance, "Swordigo is not installed! Can't launch.", Toast.LENGTH_LONG).show());
 			return;
 		}
@@ -374,12 +318,7 @@ public class MainActivity extends FragmentActivity {
 
 	// Call native onModExit to clean up after a mod
 	private void unloadGameHooks() {
-		if (!hooksLoaded) return;
-		try { API.onModExit(); } catch (Throwable t) {
-			Log.e(TAG, "onModExit failed", t);
-		} finally {
-			hooksLoaded = false;
-		}
+		ModLoader.unloadGameHooks();
 	}
 
 	public static void returnToLauncher() {
@@ -476,33 +415,6 @@ public class MainActivity extends FragmentActivity {
 		super.onDestroy();
 		unloadGameHooks();
 		if (instance == this) instance = null;
-	}
-
-	@SuppressLint("SetWorldReadable")
-	@SuppressWarnings("ResultOfMethodCallIgnored")
-	private void extractLibFromZip(String[] apkPaths, String zipEntryPath, File destFile) throws IOException {
-		// I should probably try to find another way to load the libs other than extraction
-		if (destFile.exists() && destFile.length() > 0) {
-			destFile.setReadable(true, false);
-			destFile.setExecutable(true, false);
-			return;
-		}
-		for (String apkPath : apkPaths) {
-			try (ZipFile zipFile = new ZipFile(apkPath)) {
-				ZipEntry entry = zipFile.getEntry(zipEntryPath);
-				if (entry == null) continue;
-				try (InputStream in = zipFile.getInputStream(entry);
-				     FileOutputStream out = new FileOutputStream(destFile)) {
-					byte[] buf = new byte[8192];
-					int n;
-					while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
-				}
-				destFile.setReadable(true, false);
-				destFile.setExecutable(true, false);
-				return;
-			}
-		}
-		throw new java.io.FileNotFoundException("missing " + zipEntryPath + " in any split apk");
 	}
 
 	private void checkForUpdate() {
