@@ -483,7 +483,7 @@ public class FilesFragment extends Fragment {
 				sb.append(buf, 0, n);
 				total += n;
 				if (total >= maxBytes) {
-					sb.append("\n\n… truncated (").append(formatSize(f.length())).append(" total)");
+					sb.append("\n\n... truncated (").append(formatSize(f.length())).append(" total)");
 					break;
 				}
 			}

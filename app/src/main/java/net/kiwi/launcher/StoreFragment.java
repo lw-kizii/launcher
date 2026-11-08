@@ -133,29 +133,21 @@ public class StoreFragment extends Fragment {
 
 	private void refreshStore() {
 		if (binding == null || getContext() == null) return;
-		final File cacheFile = new File(requireContext().getCacheDir(), "store_cache.json");
-
 		if (all.isEmpty()) {
-			JSONArray cached = readCache(cacheFile);
-			if (cached != null) {
-				all.clear();
-				all.addAll(parse(cached));
-				applyFilter(textOf(binding.search));
-			}
 			binding.progress.setVisibility(VISIBLE);
 		}
 
 		new Thread(() -> {
 			try {
-				String raw = httpGetStore();
-				JSONArray arr = new JSONArray(sanitize(raw));
-				writeCache(cacheFile, raw);
 				Map<String, Integer> counts = fetchDownloadCounts();
-				final List<StoreEntry> list = parse(arr);
+				final List<StoreEntry> list = fetchStoreEntriesFromFolder();
 				for (StoreEntry e : list) {
 					Integer c = counts.get(assetKey(e.downloadUrl));
+					if (c == null && e.id != null) c = counts.get(e.id.toLowerCase(Locale.ROOT));
+					if (c == null && e.name != null) c = counts.get(e.name.toLowerCase(Locale.ROOT));
 					if (c != null) e.downloads = c;
 				}
+				list.sort((a, b) -> Integer.compare(b.downloads, a.downloads));
 				main.post(() -> {
 					if (binding == null) return;
 					binding.progress.setVisibility(View.GONE);
@@ -192,54 +184,31 @@ public class StoreFragment extends Fragment {
 	private Map<String, Integer> fetchDownloadCounts() {
 		Map<String, Integer> map = new HashMap<>();
 		try {
-			HttpURLConnection conn = openGet("https://api.github.com/repos/lw-kizii/_/releases", 8000, 10000);
-			conn.setRequestProperty("Accept", "application/vnd.github+json");
+			HttpURLConnection conn = openGet("https://raw.githubusercontent.com/lw-kizii/_/main/launcher-data/downloads.txt", 8000, 10000);
 			if (conn.getResponseCode() != 200) return map;
-			String body;
 			try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
-				StringBuilder sb = new StringBuilder();
-				char[] buf = new char[8192];
-				int n;
-				while ((n = reader.read(buf)) != -1) sb.append(buf, 0, n);
-				body = sb.toString();
-			}
-			JSONArray releases = new JSONArray(body);
-			for (int i = 0; i < releases.length(); i++) {
-				JSONObject rel = releases.optJSONObject(i);
-				if (rel == null) continue;
-				JSONArray assets = rel.optJSONArray("assets");
-				if (assets == null) continue;
-				for (int j = 0; j < assets.length(); j++) {
-					JSONObject a = assets.optJSONObject(j);
-					if (a == null) continue;
-					String name = a.optString("name", "");
-					int count = a.optInt("download_count", 0);
-					if (!name.isEmpty()) map.put(name.toLowerCase(Locale.ROOT), count);
+				String line;
+				while ((line = reader.readLine()) != null) {
+					line = line.trim();
+					if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) continue;
+					String[] parts = line.split("[=: \t]+", 2);
+					if (parts.length == 2) {
+						String key = parts[0].trim().toLowerCase(Locale.ROOT);
+						String val = parts[1].trim();
+						try {
+							int count = Integer.parseInt(val);
+							map.put(key, count);
+							if (key.endsWith(".zip")) {
+								map.put(key.substring(0, key.length() - 4), count);
+							} else {
+								map.put(key + ".zip", count);
+							}
+						} catch (Exception ignored) {}
+					}
 				}
 			}
 		} catch (Exception ignored) {}
 		return map;
-	}
-
-	private List<StoreEntry> parse(JSONArray arr) {
-		List<StoreEntry> out = new ArrayList<>();
-		if (arr == null) return out;
-		for (int i = 0; i < arr.length(); i++) {
-			JSONObject o = arr.optJSONObject(i);
-			if (o == null) continue;
-			StoreEntry e = new StoreEntry();
-			e.id = o.optString("id", "");
-			e.name = o.optString("name", e.id);
-			e.description = o.optString("description", "");
-			e.longDescription = firstNonEmpty(o.optString("longDescription", null), o.optString("long_description", null), e.description);
-			e.version = o.optString("version", "");
-			e.downloadUrl = firstNonEmpty(o.optString("downloadUrl", null), o.optString("download", null), o.optString("url", null));
-			e.iconUrl = o.optString("icon", "");
-			Integer c = downloadCounts.get(assetKey(e.downloadUrl));
-			if (c != null) e.downloads = c;
-			if (e.downloadUrl != null && !e.downloadUrl.isEmpty()) out.add(e);
-		}
-		return out;
 	}
 
 	private static String firstNonEmpty(String... values) {
@@ -336,7 +305,7 @@ public class StoreFragment extends Fragment {
 		ItemStoreModBinding b = entry.binding;
 		if (b != null) setInstallingUi(b, true, 0);
 
-		Toast.makeText(requireContext(), "Downloading " + entry.name + "…", Toast.LENGTH_SHORT).show();
+		Toast.makeText(requireContext(), "Downloading " + entry.name + "...", Toast.LENGTH_SHORT).show();
 		new Thread(() -> {
 			File zip = new File(requireContext().getCacheDir(), "store_" + System.currentTimeMillis() + ".zip");
 			try {
@@ -393,16 +362,22 @@ public class StoreFragment extends Fragment {
 		loadIcon(url, bmp -> { if (bmp != null && target != null) target.setImageBitmap(bmp); });
 	}
 
-	private void loadIcon(String url, ImageCallback cb) {
-		if (url == null || url.isEmpty()) { cb.onBitmap(null); return; }
+	private void loadIcon(String urlStr, ImageCallback cb) {
+		if (urlStr == null || urlStr.trim().isEmpty()) { cb.onBitmap(null); return; }
+		String url = urlStr.trim();
+		if (!url.startsWith("http://") && !url.startsWith("https://")) {
+			if (url.startsWith("/")) url = url.substring(1);
+			url = "https://raw.githubusercontent.com/lw-kizii/_/main/launcher-data/" + url;
+		}
 		Bitmap cached = iconCache.get(url);
 		if (cached != null && !cached.isRecycled()) { cb.onBitmap(cached); return; }
+		final String finalUrl = url;
 		new Thread(() -> {
 			try {
-				HttpURLConnection conn = openGet(url, 8000, 8000);
+				HttpURLConnection conn = openGet(finalUrl, 8000, 8000);
 				if (conn.getResponseCode() != 200) { main.post(() -> cb.onBitmap(null)); return; }
 				Bitmap bmp = BitmapFactory.decodeStream(new BufferedInputStream(conn.getInputStream()));
-				if (bmp != null) iconCache.put(url, bmp);
+				if (bmp != null) iconCache.put(finalUrl, bmp);
 				main.post(() -> cb.onBitmap(bmp));
 			} catch (Exception e) {
 				main.post(() -> cb.onBitmap(null));
@@ -424,22 +399,152 @@ public class StoreFragment extends Fragment {
 		return conn;
 	}
 
-	private static String httpGetStore() throws Exception {
-		HttpURLConnection conn = openGet(
-			"https://raw.githubusercontent.com/lw-kizii/_/main/launcher-data/store.json",
-			10000, 10000);
-		conn.setRequestProperty("Accept", "application/json,text/plain,*/*");
-		if (conn.getResponseCode() != 200) throw new Exception("HTTP " + conn.getResponseCode());
-		InputStream in = conn.getInputStream();
-		String encoding = conn.getContentEncoding();
-		if (encoding != null && encoding.toLowerCase(Locale.ROOT).contains("gzip")) in = new GZIPInputStream(in);
-		try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-			StringBuilder sb = new StringBuilder();
-			char[] buf = new char[8192];
-			int n;
-			while ((n = reader.read(buf)) != -1) sb.append(buf, 0, n);
-			return sb.toString();
+	private static List<StoreEntry> fetchStoreEntriesFromFolder() {
+		List<StoreEntry> list = new ArrayList<>();
+		List<String> tomlUrls = new ArrayList<>();
+		try {
+			HttpURLConnection conn = openGet("https://api.github.com/repos/lw-kizii/_/contents/launcher-data/mods", 10000, 10000);
+			conn.setRequestProperty("Accept", "application/vnd.github+json");
+			if (conn.getResponseCode() == 200) {
+				String body;
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+					StringBuilder sb = new StringBuilder();
+					char[] buf = new char[8192];
+					int n;
+					while ((n = r.read(buf)) != -1) sb.append(buf, 0, n);
+					body = sb.toString();
+				}
+				JSONArray files = new JSONArray(body);
+				for (int i = 0; i < files.length(); i++) {
+					JSONObject f = files.optJSONObject(i);
+					if (f == null) continue;
+					String name = f.optString("name", "");
+					String downloadUrl = f.optString("download_url", "");
+					if (name.endsWith(".toml") && !downloadUrl.isEmpty()) {
+						tomlUrls.add(downloadUrl);
+					}
+				}
+			}
+		} catch (Exception ignored) {}
+
+		if (tomlUrls.isEmpty()) {
+			tomlUrls.add("https://raw.githubusercontent.com/lw-kizii/_/main/launcher-data/mods/net.kiwi.cli.toml");
 		}
+
+		for (String url : tomlUrls) {
+			try {
+				HttpURLConnection tomlConn = openGet(url, 8000, 8000);
+				if (tomlConn.getResponseCode() != 200) continue;
+				String tomlStr;
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(tomlConn.getInputStream(), StandardCharsets.UTF_8))) {
+					StringBuilder sb = new StringBuilder();
+					char[] buf = new char[8192];
+					int n;
+					while ((n = r.read(buf)) != -1) sb.append(buf, 0, n);
+					tomlStr = sb.toString();
+				}
+				StoreEntry entry = parseToml(tomlStr);
+				if (entry != null && entry.downloadUrl != null && !entry.downloadUrl.isEmpty()) {
+					if (entry.id == null || entry.id.isEmpty()) {
+						int slash = url.lastIndexOf('/');
+						String fn = slash >= 0 ? url.substring(slash + 1) : url;
+						entry.id = fn.replace(".toml", "");
+					}
+					if (entry.name == null || entry.name.isEmpty()) entry.name = entry.id;
+					list.add(entry);
+				}
+			} catch (Exception ignored) {}
+		}
+		return list;
+	}
+
+	private static StoreEntry parseToml(String content) {
+		StoreEntry e = new StoreEntry();
+		if (content == null || content.isEmpty()) return e;
+		String[] lines = content.split("\r?\n");
+		String key = null;
+		StringBuilder multiline = null;
+		boolean inMultiline = false;
+		String quoteSymbol = null;
+
+		for (String line : lines) {
+			String trimmed = line.trim();
+			if (!inMultiline && (trimmed.isEmpty() || trimmed.startsWith("#"))) continue;
+
+			if (inMultiline) {
+				if (quoteSymbol != null && line.contains(quoteSymbol)) {
+					int endIdx = line.indexOf(quoteSymbol);
+					if (endIdx >= 0) multiline.append(line, 0, endIdx);
+					setField(e, key, multiline.toString().trim());
+					inMultiline = false;
+					multiline = null;
+					key = null;
+					quoteSymbol = null;
+				} else {
+					multiline.append(line).append("\n");
+				}
+				continue;
+			}
+
+			int eq = line.indexOf('=');
+			if (eq <= 0) continue;
+
+			key = line.substring(0, eq).trim();
+			String val = line.substring(eq + 1).trim();
+
+			if (!val.startsWith("\"\"\"") && !val.startsWith("'''")) {
+				int hashIdx = val.indexOf('#');
+				if (hashIdx >= 0) {
+					boolean inQ = false;
+					for (int i = 0; i < hashIdx; i++) {
+						if (val.charAt(i) == '"' || val.charAt(i) == '\'') inQ = !inQ;
+					}
+					if (!inQ) val = val.substring(0, hashIdx).trim();
+				}
+			}
+
+			if (val.startsWith("\"\"\"") || val.startsWith("'''")) {
+				quoteSymbol = val.startsWith("\"\"\"") ? "\"\"\"" : "'''";
+				val = val.substring(3);
+				if (val.contains(quoteSymbol)) {
+					int endIdx = val.indexOf(quoteSymbol);
+					val = val.substring(0, endIdx);
+					setField(e, key, val.trim());
+					key = null;
+					quoteSymbol = null;
+				} else {
+					inMultiline = true;
+					multiline = new StringBuilder(val).append("\n");
+				}
+			} else {
+				if (val.startsWith("\"") && val.endsWith("\"") && val.length() >= 2) {
+					val = val.substring(1, val.length() - 1);
+				} else if (val.startsWith("'") && val.endsWith("'") && val.length() >= 2) {
+					val = val.substring(1, val.length() - 1);
+				}
+				setField(e, key, unescapeString(val));
+				key = null;
+			}
+		}
+		return e;
+	}
+
+	private static void setField(StoreEntry e, String key, String val) {
+		if (e == null || key == null || val == null) return;
+		switch (key) {
+			case "id": e.id = val; break;
+			case "name": e.name = val; break;
+			case "description": e.description = val; break;
+			case "longDescription": case "long_description": e.longDescription = val; break;
+			case "version": e.version = val; break;
+			case "downloadUrl": case "download": case "url": e.downloadUrl = val; break;
+			case "iconUrl": case "icon": case "icon_url": e.iconUrl = val; break;
+		}
+	}
+
+	private static String unescapeString(String s) {
+		if (s == null) return "";
+		return s.replace("\\\"", "\"").replace("\\\\", "\\").replace("\\n", "\n").replace("\\t", "\t");
 	}
 
 	private void downloadTo(String urlStr, File dest, ProgressCallback cb) throws Exception {
@@ -466,31 +571,9 @@ public class StoreFragment extends Fragment {
 		if (cb != null) cb.onProgress(100);
 	}
 
-	private static String sanitize(String raw) {
-		return raw == null ? "[]" : raw.trim();
-	}
-
-	private static void writeCache(File file, String raw) {
-		try (FileOutputStream out = new FileOutputStream(file)) {
-			out.write(raw.getBytes(StandardCharsets.UTF_8));
-		} catch (Exception ignored) {}
-	}
-
-	private static JSONArray readCache(File file) {
-		if (file == null || !file.exists()) return null;
-		try (FileInputStream in = new FileInputStream(file); ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-			byte[] buf = new byte[4096];
-			int n;
-			while ((n = in.read(buf)) != -1) bos.write(buf, 0, n);
-			return new JSONArray(sanitize(new String(bos.toByteArray(), StandardCharsets.UTF_8)));
-		} catch (Exception e) {
-			return null;
-		}
-	}
-
 	private static String formatCount(int n) {
-		if (n >= 1000000) return String.format(Locale.US, "%.1fM", n / 1000000.0);
-		if (n >= 1000) return String.format(Locale.US, "%.1fK", n / 1000.0);
+		if (n >= 1000000) return String.format(Locale.US, "%.1fM", n / 1000000.0); // Never going to be possible
+		if (n >= 1000) return String.format(Locale.US, "%.2fK", n / 1000.0); // 1.xxK
 		return String.valueOf(n);
 	}
 
@@ -513,7 +596,7 @@ public class StoreFragment extends Fragment {
 			setInstallingUi(h.b, e.installing, e.installing ? h.b.progressBar.getProgress() : 0);
 			h.b.icon.setImageResource(R.drawable.ic_store);
 			loadIcon(e.iconUrl, bmp -> {
-				if (bmp != null && h.getBindingAdapterPosition() == position) h.b.icon.setImageBitmap(bmp);
+				if (bmp != null && e.binding == h.b) h.b.icon.setImageBitmap(bmp);
 			});
 			h.b.btnInstall.setOnClickListener(v -> install(e));
 			h.itemView.setOnClickListener(v -> showDetail(e));

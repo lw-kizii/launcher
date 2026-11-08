@@ -99,7 +99,7 @@ public class ModsFragment extends Fragment {
 		if (requestCode != 9999 || resultCode != android.app.Activity.RESULT_OK
 			|| data == null || data.getData() == null) return;
 		Uri uri = data.getData();
-		Toast.makeText(requireContext(), "Installing…", Toast.LENGTH_SHORT).show();
+		Toast.makeText(requireContext(), "Installing...", Toast.LENGTH_SHORT).show();
 		ModManager.installMod(requireContext(), uri, new ModManager.InstallCallback() {
 			@Override
 			public void onSuccess(ModManager.ModInfo mod) {
