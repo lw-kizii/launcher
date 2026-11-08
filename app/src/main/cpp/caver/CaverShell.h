@@ -18,11 +18,4 @@ typedef struct CaverShell {
 	bool suspended;
 } CaverShell;
 
-CaverShell *caverShell_get();
-
-DL_SYMBOL_DECL(CaverShell_SuspendApplication, void, (CaverShell *shell, bool unknown));
-DL_SYMBOL_DECL(CaverShell_ResumeApplication, void, (CaverShell *shell));
-DL_SYMBOL_DECL(CaverShell_QuitApplication, void, (CaverShell *shell));
-DL_SYMBOL_DECL(CaverShell_InitApplication, void, (CaverShell *shell));
-
 #endif //LAWNCHER_CAVERSHELL_H

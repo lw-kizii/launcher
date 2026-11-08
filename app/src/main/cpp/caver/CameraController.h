@@ -29,15 +29,12 @@ typedef struct CameraController {
 	float rumble;
 } CameraController;
 
-CameraController *cameraController_from_L(lua_State *L);
-CameraController *cameraController_get();
-
-DL_SYMBOL_DECL(CameraController_Update, void, (CameraController *cc, float dt));
-DL_SYMBOL_DECL(CameraController_FollowObject, void, (CameraController *cc, void *intrusive_object, Vector3 *offset));
-DL_SYMBOL_DECL(CameraController_StopFollowing, void, (CameraController *cc));
-DL_SYMBOL_DECL(CameraController_FocusAtPoint, void, (CameraController *cc, Vector3 *point, bool immediate));
-DL_SYMBOL_DECL(CameraController_GotoTargetImmediately, void, (CameraController *cc));
-DL_SYMBOL_DECL(CameraController_ResetFocus, void, (CameraController *cc));
-DL_SYMBOL_DECL(CameraController_Rumble, void, (CameraController *cc));
+static inline CameraController *cameraController_from_L(lua_State *L) {
+	lua_getglobal(L, "cameraController");
+	if (!lua_islightuserdata(L, -1)) return NULL;
+	const void *cc = lua_topointer(L, -1);
+	lua_pop(L, 1);
+	return (CameraController *)cc;
+}
 
 #endif

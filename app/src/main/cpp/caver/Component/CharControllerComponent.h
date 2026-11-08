@@ -2,6 +2,9 @@
 #define LAWNCHER_CHARCONTROLLERCOMPONENT_H
 
 #include "hook.h"
+#include "Component.h"
+#include "lua.h"
+#include "GameSceneController.h"
 
 typedef struct CharControllerComponent {
 	void* vtable;
@@ -31,5 +34,12 @@ typedef struct CharControllerComponent {
 	float cooldown;
 	char _pad10[archSplit(0x8, 0xc)];
 } CharControllerComponent; // sizeof(0x1d8, 0x300)
+
+static inline CharControllerComponent *charControllerComponent_from_L(lua_State *L) {
+	GameSceneController *gsc = gsc_from_L(L);
+	SceneObject *hero = gsc->hero;
+	void *cc = component_fetch(hero, "CharControllerComponent");
+	return (CharControllerComponent *)cc;
+}
 
 #endif //LAWNCHER_CHARCONTROLLERCOMPONENT_H

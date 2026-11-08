@@ -5,6 +5,11 @@
 #include "types.h"
 #include "lua.h"
 
+typedef struct Camera Camera;
+typedef struct CameraController CameraController;
+
+static inline CameraController *cameraController_from_L(lua_State *L);
+
 typedef struct Camera {
 	char _pad0[0x10];
 	Vector3 position;
@@ -23,12 +28,12 @@ typedef struct Camera {
 	Matrix4 inverseViewProjection;
 } Camera;
 
-Camera *camera_from_L(lua_State *L);
+#include "CameraController.h"
 
-DL_SYMBOL_DECL(Camera_SetAspectRatio, void, (Camera *cam, float aspect));
-DL_SYMBOL_DECL(Camera_SetOrthoProjection, void, (Camera *cam, float left, float right, float bottom, float top));
-DL_SYMBOL_DECL(Camera_SetPerspectiveProjection, void, (Camera *cam, float fovy, float aspect, float near, float far));
-DL_SYMBOL_DECL(Camera_EvaluateViewMatrix, void, (Camera *cam));
-DL_SYMBOL_DECL(Camera_SetProjectionMatrix, void, (Camera *cam, Matrix4 *mat));
+static inline Camera *camera_from_L(lua_State *L) {
+	CameraController *cc = cameraController_from_L(L);
+	if (!cc) return NULL;
+	return cc->camera;
+}
 
 #endif

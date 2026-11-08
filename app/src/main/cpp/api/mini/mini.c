@@ -3,12 +3,19 @@
 #include "lauxlib.h"
 #include "Scene.h"
 #include "GameViewController.h"
+#include "GameSceneController.h"
 #include "PlayerProfile.h"
 #include "Component.h"
 #include "log.h"
 
 #define LOG_TAG "SwMiniLogs"
 #define MINI_LIB_NAME "Mini"
+
+DL_SYMBOL(
+	GameSceneController_CreateHeroObjectAt,
+	"_ZN5Caver19GameSceneController18CreateHeroObjectAtERKNS_7Vector3Eib",
+	void, (GameSceneController *gsc, Vector3 *pos, int facing_direction, bool unk)
+);
 
 static int Arch(lua_State *L) {
 	lua_pushstring(L, archSplit("armeabi-v7a", "arm64-v8a"));

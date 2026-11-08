@@ -3,6 +3,7 @@
 
 #include "hook.h"
 #include "PhysicsObjectState.h"
+#include "Component.h"
 
 typedef struct EntityComponent {
 	void* vtable;
@@ -12,5 +13,9 @@ typedef struct EntityComponent {
 	PhysicsObjectState physics; // unsure about this...
 	char _pad2[archSplit(0x2c, 0x38)];
 } EntityComponent; // sizeof(0xdc, 0x128)
+
+static inline EntityComponent *entityComponent_get(SceneObject *obj) {
+	return (EntityComponent *)component_fetch(obj, "EntityComponent");
+}
 
 #endif //LAWNCHER_ENTITYCOMPONENT_H

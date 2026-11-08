@@ -26,25 +26,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         # Libs
         libs/toml.c
 
-        # Hooks
-        hooks/Component/CharControllerComponent.c
-        hooks/Component/EntityComponent.c
-        hooks/PhysicsObjectState.c
-        hooks/AchievementsManager.c
-        hooks/Camera.c
-        hooks/CameraController.c
-        hooks/GameSceneController.c
-        hooks/GameViewController.c
-        hooks/PlayerProfile.c
-        hooks/SceneObject.c
-        hooks/Scene.c
-        hooks/CaverShell.c
-        hooks/ModelLibrary.c
-        hooks/TextureLibrary.c
-        hooks/RenderingContext.c
-        hooks/Program.c
-        hooks/Component.c
-        hooks/BindingValue.c
+
 
 
         # Lua

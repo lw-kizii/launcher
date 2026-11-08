@@ -16,9 +16,4 @@ typedef struct GameState {
 	char _pad2[archSplit(0x20, 0x40)];
 } GameState;
 
-GameState *gameState_get();
-
-DL_SYMBOL_DECL(GameState_AllNodesVisited, bool, (GameState *gs));
-DL_SYMBOL_DECL(GameState_Clear, void, (GameState *gs));
-
 #endif

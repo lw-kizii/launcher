@@ -2,6 +2,7 @@
 #include "java.h"
 #include "log.h"
 #include "toml.h"
+#include "hook.h"
 #include "AchievementsManager.h"
 #include "std_vector.h"
 #include "std_tree.h"
@@ -34,6 +35,21 @@
 #define M_BYID archSplit(0x0c, 0x18)
 #define M_KEYS archSplit(0x18, 0x30)
 #define M_BYKEY archSplit(0x24, 0x48)
+
+DL_SYMBOL(
+	AchievementsManager_sharedManager,
+	"_ZN5Caver19AchievementsManager13sharedManagerEv",
+	AchievementsManager*, (void)
+);
+
+HOOK_SYMBOL(
+	AchievementsManager_Constructor,
+	"_ZN5Caver19AchievementsManagerC2Ev",
+	void, (AchievementsManager *this)
+) {
+	orig_AchievementsManager_Constructor(this);
+	ML_LoadAchievements(this);
+}
 
 static void noop(void) {}
 static void *fakeVtbl[6] = {noop, noop, noop, noop, noop, noop};

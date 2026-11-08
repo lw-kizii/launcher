@@ -20,8 +20,4 @@ typedef struct CharacterState {
 	char _pad3[archSplit(0x10, 0x20)];
 } CharacterState;
 
-CharacterState *characterState_get();
-
-DL_SYMBOL_DECL(CharacterState_ExperiencePointsRequiredForLevel, int, (CharacterState *cs, int level));
-
 #endif

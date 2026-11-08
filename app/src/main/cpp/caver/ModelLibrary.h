@@ -7,9 +7,4 @@
 typedef struct ModelLibrary {
 } ModelLibrary;
 
-DL_SYMBOL_DECL(ModelLibrary_sharedLibrary, ModelLibrary*, (void));
-DL_SYMBOL_DECL(ModelLibrary_ModelForName, void*, (ModelLibrary *lib, String *name));
-DL_SYMBOL_DECL(ModelLibrary_Clear, void, (ModelLibrary *lib));
-DL_SYMBOL_DECL(ModelLibrary_SetSharedLibrary, void, (ModelLibrary *lib));
-
 #endif //LAWNCHER_MODELLIBRARY_H

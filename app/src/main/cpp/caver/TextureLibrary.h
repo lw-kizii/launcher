@@ -15,13 +15,4 @@ typedef struct TextureLibrary {
 	char _pad2[archSplit(0x00, 0x08)];
 } TextureLibrary;
 
-DL_SYMBOL_DECL(TextureLibrary_sharedLibrary, TextureLibrary*, (void));
-DL_SYMBOL_DECL(TextureLibrary_TextureForName, void*, (TextureLibrary *lib, String *name, bool unknown));
-DL_SYMBOL_DECL(TextureLibrary_LoadTextureAtlasWithName, void, (TextureLibrary *lib, String *name));
-DL_SYMBOL_DECL(TextureLibrary_Clear, void, (TextureLibrary *lib));
-DL_SYMBOL_DECL(TextureLibrary_ReloadTextures, void, (TextureLibrary *lib));
-DL_SYMBOL_DECL(TextureLibrary_GetAllTextures, void, (TextureLibrary *lib, void *vector));
-DL_SYMBOL_DECL(TextureLibrary_TotalByteSize, unsigned long, (TextureLibrary *lib));
-DL_SYMBOL_DECL(TextureLibrary_PurgeTexturesIfNecessary, void, (TextureLibrary *lib));
-
 #endif

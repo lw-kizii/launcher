@@ -101,25 +101,6 @@ void dl_resolve_all(void);
 	} \
 	struct __dl_symbol_semicolon_##name { int _unused; }
 
-// Header declaration for G_DL_SYMBOL, used for caver functions `hooks/`
-#define DL_SYMBOL_DECL(name, ret, args) \
-	extern ret (*name) args; \
-	void resolve_##name(void)
-
-// DL_SYMBOL but can be exposed globally
-#define G_DL_SYMBOL(name, symbol_str, ret, args) \
-	typedef ret (*name##_t) args; \
-	name##_t name = NULL; \
-	void resolve_##name(void) { \
-		if (name) return; \
-		void *h = dlopen(HOOK_LIB_NAME, RTLD_NOW | RTLD_NOLOAD); \
-		if (h) name = (name##_t)dlsym(h, symbol_str); \
-	} \
-	__attribute__((constructor)) \
-	static void register_##name(void) { \
-		dl_register_resolver(resolve_##name); \
-	}
-
 uintptr_t get_lib_bias(void);
 uintptr_t get_lib_bss(size_t *size);
 uintptr_t get_lib_data(size_t *size);
