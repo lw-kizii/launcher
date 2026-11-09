@@ -6,51 +6,37 @@
 
 #define LOG_TAG "ProgramPatch"
 
-#ifdef __arm__            // 32-bit only
+#ifdef __arm__ // This should work on arm now...
 
 HOOK_SYMBOL(
 	LoadIntoState,
 	"_ZNK5Caver7Program13LoadIntoStateEP9lua_State",
-	int, (void *this, void *L)
+	int, (void *this, lua_State *L)
 ) {
-	void **string_px = (void **)((uintptr_t)this + 0x04);
-	void **string_pn = (void **)((uintptr_t)this + 0x08);
-	void **bytes_px  = (void **)((uintptr_t)this + 0x0c);
-	void **bytes_pn  = (void **)((uintptr_t)this + 0x10);
+	void **string_px = $(void*, this, 0x0c, 0x18);
+	void **string_pn = $(void*, this, 0x10, 0x20);
+	void **bytes_px = $(void*, this, 0x14, 0x28);
+	void **bytes_pn = $(void*, this, 0x18, 0x30);
 
-	LOGD("Try Load (Lawda).");
+	if (string_px && *string_px != NULL) {
+		void *saved_px = *bytes_px;
+		void *saved_pn = *bytes_pn;
 
-	if (*string_px != NULL) {
-		char *data = (char *)**(void ***)string_px;
-		if (data != NULL) {
-			uint32_t len = *(uint32_t *)(data - 0xc); /* libstdc++ size */
-			if (len > 0) {
-				LOGI("LoadIntoState: forcing String (len=%u), ignoring Bytes", len);
+		*bytes_px = *string_px;
+		*bytes_pn = *string_pn;
 
-				// lemme try ts
-				void *saved_px = *bytes_px;
-				void *saved_pn = *bytes_pn;
+		int ok = orig_LoadIntoState(this, L);
 
-				*bytes_px = *string_px;
-				*bytes_pn = *string_pn;
+		*bytes_px = saved_px;
+		*bytes_pn = saved_pn;
 
-				int ok = orig_LoadIntoState(this, L);
-
-				/* Restore */
-				*bytes_px = saved_px;
-				*bytes_pn = saved_pn;
-
-				return ok;
-			}
-		}
+		return ok;
 	}
 
-	/* String missing or empty → do not load any code */
-	LOGI("LoadIntoState: String empty/absent - skipping load (ignoring Bytes)");
-	return 0;
+	return orig_LoadIntoState(this, L);
 }
 
-#endif /* __arm__ */
+#endif
 
 HOOK_SYMBOL(
 	ProgramState_Update,
