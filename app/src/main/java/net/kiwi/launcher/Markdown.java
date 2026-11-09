@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.text.style.ForegroundColorSpan;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,22 +25,17 @@ public final class Markdown {
 	private Markdown() {}
 
 	// Regex patterns.
-	private static final Pattern HEADING = Pattern.compile("^(#{1,3})\\s+(.*)$");
-	private static final Pattern UL = Pattern.compile("^[-*+]\\s+(.*)$");
-	private static final Pattern OL = Pattern.compile("^\\d+\\.\\s+(.*)$");
-	private static final Pattern IMG = Pattern.compile("^\\[img:(.+)]$");
+	private static final Pattern HEADING = Pattern.compile("^(#{1,3})\\s+(.*)$"); // #
+	private static final Pattern SUBTEXT = Pattern.compile("^-#\\s+(.*)$"); // -#
+	private static final Pattern UL = Pattern.compile("^[-*+]\\s+(.*)$"); // -, *, +
+	private static final Pattern OL = Pattern.compile("^\\d+\\.\\s+(.*)$"); // Ordered List
+	private static final Pattern IMG = Pattern.compile("^\\[img:(.+)]$"); // Image [img:...]
 	private static final Pattern INLINE = Pattern.compile(
 		"(\\*\\*(.+?)\\*\\*)|(\\*(.+?)\\*)|(`([^`]+)`)|(\\[([^\\]]+)\\]\\(([^)]+)\\))"
-	);
+	); // Ugly regex for bold (**), italic (*), code (`) and hyperlinks (...)[...]
 
 	public interface ImageLoader {
 		void load(String url, ImageView target);
-	}
-
-	public static void set(TextView view, String md) {
-		if (view == null) return;
-		view.setText(parse(md));
-		view.setMovementMethod(LinkMovementMethod.getInstance());
 	}
 
 	public static void set(LinearLayout container, String md, ImageLoader loader) {
@@ -89,6 +85,27 @@ public final class Markdown {
 			if (ul.matches()) {
 				String body = ul.group(1);
 				if (body != null) appendInline(buf, "- " + body);
+				continue;
+			}
+			Matcher sub = SUBTEXT.matcher(line); // -#
+			if (sub.matches()) {
+				String body = sub.group(1);
+				if (body == null) continue;
+				int start = buf.length();
+				appendInline(buf, body);
+				int end = buf.length();
+				if (end > start) {
+					buf.setSpan(
+							new RelativeSizeSpan(0.85f),
+							start, end,
+							Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+					);
+					buf.setSpan(
+							new ForegroundColorSpan(0xFF9490A5),
+							start, end,
+							Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+					);
+				}
 				continue;
 			}
 			Matcher ol = OL.matcher(line);
@@ -199,6 +216,27 @@ public final class Markdown {
 			if (ul.matches()) {
 				String body = ul.group(1);
 				if (body != null) appendInline(out, "- " + body);
+				continue;
+			}
+			Matcher sub = SUBTEXT.matcher(line);
+			if (sub.matches()) {
+				String body = sub.group(1);
+				if (body == null) continue;
+				int start = out.length();
+				appendInline(out, body);
+				int end = out.length();
+				if (end > start) {
+					out.setSpan(
+							new RelativeSizeSpan(0.85f),
+							start, end,
+							Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+					);
+					out.setSpan(
+							new ForegroundColorSpan(0xFF9490A5),
+							start, end,
+							Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+					);
+				}
 				continue;
 			}
 			Matcher ol = OL.matcher(line);
