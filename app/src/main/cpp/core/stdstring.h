@@ -3,7 +3,12 @@
 
 #include <stddef.h>
 
-#define STRING_SHORT_CAP 23
+/* I'm not *too* sure but the size should be 12b on 32 and 24b on 64.. */
+#if defined(__arm__)
+	#define STRING_SHORT_CAP 11
+#else
+	#define STRING_SHORT_CAP 23
+#endif
 
 typedef struct {
 	size_t cap;
