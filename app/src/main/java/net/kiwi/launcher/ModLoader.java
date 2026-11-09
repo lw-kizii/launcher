@@ -83,28 +83,39 @@ public class ModLoader {
 	@SuppressLint("UnsafeDynamicallyLoadedCode")
 	public static void loadGameLibraries(Context context) {
 		File libDir = getExtractedPath(context);
-		File openAlFile = new File(libDir, "libopenal-soft.so");
-		System.load(openAlFile.getAbsolutePath());
+		System.load(new File(libDir, "libopenal-soft.so").getAbsolutePath());
 
-		String abi = getAbi();
-		File customSwordigo = null;
-		if (Launcher.currentMod != null && Launcher.currentMod.dir != null) {
-			File customFile = new File(Launcher.currentMod.dir, "libswordigo/" + abi + "/libswordigo.so");
-			if (customFile.exists() && customFile.isFile()) {
-				customSwordigo = customFile;
-			}
-		}
-
-		if (customSwordigo != null) {
-			Log.i(TAG, "Loading custom libswordigo from: " + customSwordigo.getAbsolutePath());
-			System.load(customSwordigo.getAbsolutePath());
+		File customLib = getCustomSwordigoLib(context);
+		if (customLib != null) {
+			Log.i(TAG, "Loading custom libswordigo from cache: " + customLib.getAbsolutePath());
+			System.load(customLib.getAbsolutePath());
 			hooksLoaded = false;
 		} else {
-			File vanillaSwordigo = new File(libDir, "libswordigo.so");
-			Log.i(TAG, "Loading vanilla libswordigo from: " + vanillaSwordigo.getAbsolutePath());
-			System.load(vanillaSwordigo.getAbsolutePath());
+			File vanillaLib = new File(libDir, "libswordigo.so");
+			Log.i(TAG, "Loading vanilla libswordigo from: " + vanillaLib.getAbsolutePath());
+			System.load(vanillaLib.getAbsolutePath());
 			API.loadHooks();
 			hooksLoaded = true;
+		}
+	}
+
+	private static File getCustomSwordigoLib(Context context) {
+		if (Launcher.currentMod == null || Launcher.currentMod.dir == null) return null;
+		File customFile = new File(Launcher.currentMod.dir, "libswordigo/" + getAbi() + "/libswordigo.so");
+		if (customFile.exists() && customFile.isFile()) {
+			return copyToCache(context, customFile);
+		}
+		return null;
+	}
+
+	private static File copyToCache(Context context, File srcFile) {
+		File destFile = new File(context.getCacheDir(), "libswordigo_custom.so");
+		try (InputStream in = new java.io.FileInputStream(srcFile)) {
+			copyStream(in, destFile);
+			return destFile;
+		} catch (IOException e) {
+			Log.e(TAG, "Failed to copy " + srcFile.getName() + " to cache", e);
+			return srcFile;
 		}
 	}
 
@@ -130,6 +141,20 @@ public class ModLoader {
 
 	@SuppressLint("SetWorldReadable")
 	@SuppressWarnings("ResultOfMethodCallIgnored")
+	private static void copyStream(InputStream in, File destFile) throws IOException {
+		try (FileOutputStream out = new FileOutputStream(destFile)) {
+			byte[] buf = new byte[8192];
+			int n;
+			while ((n = in.read(buf)) != -1) {
+				out.write(buf, 0, n);
+			}
+		}
+		destFile.setReadable(true, false);
+		destFile.setExecutable(true, false);
+	}
+
+	@SuppressLint("SetWorldReadable")
+	@SuppressWarnings("ResultOfMethodCallIgnored")
 	public static void extractLibFromZip(String[] apkPaths, String zipEntryPath, File destFile) throws IOException {
 		if (destFile.exists() && destFile.length() > 0) {
 			destFile.setReadable(true, false);
@@ -140,14 +165,9 @@ public class ModLoader {
 			try (ZipFile zipFile = new ZipFile(apkPath)) {
 				ZipEntry entry = zipFile.getEntry(zipEntryPath);
 				if (entry == null) continue;
-				try (InputStream in = zipFile.getInputStream(entry);
-				     FileOutputStream out = new FileOutputStream(destFile)) {
-					byte[] buf = new byte[8192];
-					int n;
-					while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+				try (InputStream in = zipFile.getInputStream(entry)) {
+					copyStream(in, destFile);
 				}
-				destFile.setReadable(true, false);
-				destFile.setExecutable(true, false);
 				return;
 			}
 		}
