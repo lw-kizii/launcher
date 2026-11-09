@@ -5,6 +5,8 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
@@ -33,8 +35,6 @@ import com.touchfoo.swordigo.Native;
 import net.kiwi.launcher.databinding.ActivityMainBinding;
 
 import java.io.File;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.lang.reflect.Method;
 
 import org.json.JSONObject;
@@ -79,6 +79,40 @@ public class MainActivity extends FragmentActivity {
 		return instance != null ? ModLoader.getExtractedPath(instance) : null;
 	}
 
+	static void checkSwordigo() {
+		if (instance == null) return;
+		String playStoreUrl = "https://play.google.com/store/apps/details?id=com.touchfoo.swordigo";
+		try {
+			PackageInfo pi = instance.getPackageManager().getPackageInfo("com.touchfoo.swordigo", 0);
+			if (pi.versionName == null || !pi.versionName.equals("1.4.13")) {
+				String ver = pi.versionName != null ? pi.versionName : "unknown";
+				Util.alert(
+					instance,
+					"Warning",
+					"Your device currently has Swordigo v" + ver + " installed, which will definitely not work on the Launcher. Update your Swordigo to v1.4.13 so the launcher functions properly!",
+					"Update", () -> {
+						try {
+							instance.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(playStoreUrl)));
+						} catch (Exception ignored) {}
+					},
+					"Cancel", null
+				);
+			}
+		} catch (PackageManager.NameNotFoundException e) {
+			Util.alert(
+				instance,
+				"Warning",
+				"Swordigo is not installed on your device. Install Swordigo v1.4.13 to use the Launcher.",
+				"Install", () -> {
+					try {
+						instance.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(playStoreUrl)));
+					} catch (Exception ignored) {}
+				},
+				"Cancel", null
+			);
+		} catch (Exception ignored) {}
+	}
+
 	@Override
 	@SuppressLint("UnsafeDynamicallyLoadedCode")
 	protected void onCreate(Bundle bundle) {
@@ -86,7 +120,7 @@ public class MainActivity extends FragmentActivity {
 		getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
 		instance = this;
 
-		// There'll be a use for this.
+		// Global Resources!
 		File extDir = getExternalFilesDir(null);
 		if (extDir != null) {
 			File resourcesDir = new File(extDir, "resources");
@@ -98,9 +132,9 @@ public class MainActivity extends FragmentActivity {
 		// Load the launcher library.
 		System.loadLibrary("launcher");
 
-		// UI, Previous Crash
-		showLauncherUi();
-		checkPreviousCrash();
+		showLauncherUi(); // Launcher UI
+		checkSwordigo(); // Check for Swordigo...
+		checkPreviousCrash(); // Show previous crash.
 
 		prepareSwordigo();
 
@@ -128,7 +162,6 @@ public class MainActivity extends FragmentActivity {
 			ModLoader.prepareSwordigo(this);
 		} catch (Exception e) {
 			Log.e(TAG, "prepareSwordigo failed", e);
-			runOnUiThread(() -> showErrorDialog(e));
 		}
 	}
 
@@ -224,22 +257,6 @@ public class MainActivity extends FragmentActivity {
 				}
 			},
 			"Dismiss", finalLog::delete);
-	}
-
-	private void showErrorDialog(Exception e) {
-		StringWriter sw = new StringWriter();
-		e.printStackTrace(new PrintWriter(sw));
-		String stack = sw.toString();
-		String message;
-		if (e instanceof android.content.pm.PackageManager.NameNotFoundException) {
-			message = "Vanilla Swordigo (com.touchfoo.swordigo) is not installed.\n\n"
-				+ "Install Swordigo from the Play Store, then reopen the launcher.";
-		} else {
-			message = "Failed to extract/load Swordigo resources.\n\n"
-				+ e.getClass().getSimpleName() + ": " + e.getMessage() + "\n\n"
-				+ (stack.length() > 300 ? stack.substring(0, 300) + "..." : stack);
-		}
-		Util.alert(this, "Swordigo Initialization Failed", message, "Got it", null);
 	}
 
 	@SuppressLint("UnsafeDynamicallyLoadedCode")
