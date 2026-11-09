@@ -35,21 +35,17 @@ void button_remove_all(void) {
 }
 
 static const luaL_Reg OverlayController[] = {
-	{"NewButton",    NewButton},
-	{"NewOverlay",   NewOverlay},
-	{"NewDrawer",    NewDrawer},
-	{"NewSeekBar",   NewSeekBar},
+	{"NewButton", NewButton},
+	{"NewOverlay", NewOverlay},
 	{"NewTextInput", NewTextInput},
-	{"RemoveAll",    removeAll},
-	{"HideAll",      setHiddenAll},
+	{"RemoveAll", removeAll},
+	{"HideAll", setHiddenAll},
 	{NULL, NULL}
 };
 
 void API_register_java_stuff(lua_State *L) {
 	open_button_mt(L);
 	open_overlay_mt(L);
-	open_drawer_mt(L);
-	open_seekbar_mt(L);
 	open_textinput_mt(L);
 
 	lua_newtable(L);

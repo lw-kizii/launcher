@@ -32,8 +32,6 @@ public final class Core {
 	static WeakReference<ViewGroup> rootRef;
 	static final HashMap<String, Buttons.Data> buttons = new HashMap<>();
 	static final HashMap<String, Overlays.Data> overlays = new HashMap<>();
-	static final HashMap<String, Drawers.Data> drawers = new HashMap<>();
-	static final HashMap<String, SeekBars.Data> seekBars = new HashMap<>();
 	static final HashMap<String, TextInputs.Data> textInputs = new HashMap<>();
 
 	private Core() {}
@@ -151,10 +149,8 @@ public final class Core {
 			if (r == null) return;
 			for (Buttons.Data d : buttons.values()) r.removeView(d.button);
 			for (Overlays.Data d : overlays.values()) r.removeView(d.frame);
-			for (Drawers.Data d : drawers.values()) r.removeView(d.frame);
-			for (SeekBars.Data d : seekBars.values()) r.removeView(d.seekBar);
 			for (TextInputs.Data d : textInputs.values()) r.removeView(d.editText);
-			buttons.clear(); overlays.clear(); drawers.clear(); seekBars.clear(); textInputs.clear();
+			buttons.clear(); overlays.clear(); textInputs.clear();
 			Log.d(TAG, "Destroyed all");
 		});
 	}
@@ -165,10 +161,6 @@ public final class Core {
 			for (Buttons.Data d : buttons.values()) Buttons.updateVisibility(d);
 			for (Overlays.Data d : overlays.values())
 				d.frame.setVisibility(!globallyHidden && !d.hidden ? View.VISIBLE : View.GONE);
-			for (Drawers.Data d : drawers.values())
-				d.frame.setVisibility(!globallyHidden ? View.VISIBLE : View.GONE);
-			for (SeekBars.Data d : seekBars.values())
-				d.seekBar.setVisibility(!globallyHidden && !d.hidden ? View.VISIBLE : View.GONE);
 			for (TextInputs.Data d : textInputs.values()) {
 				d.editText.setVisibility(!globallyHidden && !d.hidden ? View.VISIBLE : View.GONE);
 				if (globallyHidden || d.hidden) { d.editText.clearFocus(); hideKeyboard(d.editText); }

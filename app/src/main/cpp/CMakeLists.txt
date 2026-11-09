@@ -46,12 +46,10 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         api/files/os.c
 
         api/overlay/button.c
-        api/overlay/drawer.c
         api/overlay/hooks.c
         api/overlay/legacy_bc.c
         api/overlay/main.c
         api/overlay/overlay.c
-        api/overlay/seekbar.c
         api/overlay/textinput.c
 
         api/main.c

@@ -56,34 +56,6 @@ static int ov_addButton(lua_State *L) {
 	return 1;
 }
 
-static int ov_addSeekBar(lua_State *L) {
-	MiniOverlay *ov = CHECK_OVERLAY(L);
-	MiniSeekBar *sb = (MiniSeekBar *)luaL_checkudata(L, 2, SEEKBAR_MT);
-	GET_ENV(); GET_CLS();
-	jmethodID m = VOID_METHOD("overlayAddSeekBar", "(Ljava/lang/String;Ljava/lang/String;)V");
-	jstring jovid = JID(env, ov);
-	jstring jsbid = JID(env, sb);
-	(*env)->CallStaticVoidMethod(env, cls, m, jovid, jsbid);
-	(*env)->DeleteLocalRef(env, jovid);
-	(*env)->DeleteLocalRef(env, jsbid);
-	lua_settop(L, 1);
-	return 1;
-}
-
-static int ov_addDrawer(lua_State *L) {
-	MiniOverlay *ov = CHECK_OVERLAY(L);
-	MiniDrawer *drw = (MiniDrawer *)luaL_checkudata(L, 2, DRAWER_MT);
-	GET_ENV(); GET_CLS();
-	jmethodID m = VOID_METHOD("overlayAddDrawer", "(Ljava/lang/String;Ljava/lang/String;)V");
-	jstring jovid = JID(env, ov);
-	jstring jdid = (*env)->NewStringUTF(env, drw->id);
-	(*env)->CallStaticVoidMethod(env, cls, m, jovid, jdid);
-	(*env)->DeleteLocalRef(env, jovid);
-	(*env)->DeleteLocalRef(env, jdid);
-	lua_pushvalue(L, 1);
-	return 1;
-}
-
 static int ov_addTextInput(lua_State *L) {
 	MiniOverlay *ov = CHECK_OVERLAY(L);
 	MiniTextInput *ti = (MiniTextInput *)luaL_checkudata(L, 2, TEXTINPUT_MT);
@@ -273,8 +245,6 @@ static int ov_index(lua_State *L) {
 static const luaL_Reg overlay_methods[] = {
 	{"__gc", ov_gc},
 	{"addButton", ov_addButton},
-	{"addDrawer", ov_addDrawer},
-	{"addSeekBar", ov_addSeekBar},
 	{"addTextInput", ov_addTextInput},
 	{"separator", ov_separator},
 	{"setHidden", ov_setHidden},

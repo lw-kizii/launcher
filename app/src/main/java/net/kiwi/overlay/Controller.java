@@ -55,29 +55,6 @@ public final class Controller {
 	public static float getOverlayScaleFactor(String id) { return Overlays.getScaleFactor(id); }
 	public static boolean isOverlayPinching(String id) { return Overlays.isPinching(id); }
 
-	public static void newDrawer(String id, float nx, float ny, float nw, float nh) { Drawers.create(id, nx, ny, nw, nh); }
-	public static void overlayAddDrawer(String overlayId, String drawerId) { Drawers.addToOverlay(overlayId, drawerId); }
-	public static void drawerAddButtonCustom(String drawerId, String btnId, String itemLabel, int bgResId, float textSizeSp, int paddingDp, int spacingDp) { Drawers.addButtonCustom(drawerId, btnId, itemLabel, bgResId, textSizeSp, paddingDp, spacingDp); }
-	public static void setDrawerStyle(String id, int bgColor, float cornerRadiusDp) { Drawers.setStyle(id, bgColor, cornerRadiusDp); }
-	public static void drawerAddButton(String drawerId, String btnId, String itemLabel) { Drawers.addButton(drawerId, btnId, itemLabel); }
-	public static void drawerRemoveAllItems(String drawerId) { Drawers.removeAllItems(drawerId); }
-	public static String getDrawerPressedItem(String drawerId) { return Drawers.getPressedItem(drawerId); }
-	public static void setDrawerHidden(String id, boolean hidden) { Drawers.setHidden(id, hidden); }
-	public static void removeDrawer(String id) { Drawers.remove(id); }
-
-	public static void addSeekBar(String id, float nx, float ny, float w, float h, int min, int max, int progress) { SeekBars.add(id, nx, ny, w, h, min, max, progress); }
-	public static void overlayAddSeekBar(String overlayId, String seekBarId) { SeekBars.addToOverlay(overlayId, seekBarId); }
-	public static void setSeekBarShowValue(String id, boolean show) { SeekBars.setShowValue(id, show); }
-	public static void setSeekBarValueFormat(String id, String format) { SeekBars.setValueFormat(id, format); }
-	public static void setSeekBarHidden(String id, boolean hidden) { SeekBars.setHidden(id, hidden); }
-	public static void removeSeekBar(String id) { SeekBars.remove(id); }
-	public static void setSeekBarProgress(String id, int progress) { SeekBars.setProgress(id, progress); }
-	public static int getSeekBarProgress(String id) { return SeekBars.getProgress(id); }
-	public static void setSeekBarMax(String id, int max) { SeekBars.setMax(id, max); }
-	public static int getSeekBarMax(String id) { return SeekBars.getMax(id); }
-	public static boolean isSeekBarTouching(String id) { return SeekBars.isTouching(id); }
-	public static void setSeekBarClickable(String id, boolean clickable) { SeekBars.setClickable(id, clickable); }
-
 	public static void addTextInput(String id, float nx, float ny, float w, float h, String hint) { TextInputs.add(id, nx, ny, w, h, hint); }
 	public static void dismissTextInput(String id) { TextInputs.dismiss(id); }
 	public static void overlayAddTextInput(String overlayId, String inputId) { TextInputs.addToOverlay(overlayId, inputId); }
