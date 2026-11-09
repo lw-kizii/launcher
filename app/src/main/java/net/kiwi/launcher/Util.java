@@ -173,21 +173,35 @@ public final class Util {
 			ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 	}
 
-	private static final Pattern KV_BASIC = Pattern.compile("^\\s*(\\w+)\\s*=\\s*\"([^\"]*)\"\\s*$");
-	private static final Pattern KV_SINGLE = Pattern.compile("^\\s*(\\w+)\\s*=\\s*'([^']*)'\\s*$");
-	private static final Pattern KV_TRIPLE_OPEN = Pattern.compile("^\\s*(\\w+)\\s*=\\s*\"\"\"(.*)$");
+	private static final Pattern KV_BASIC = Pattern.compile("^\\s*([\\w.-]+)\\s*=\\s*\"([^\"]*)\"\\s*$");
+	private static final Pattern KV_SINGLE = Pattern.compile("^\\s*([\\w.-]+)\\s*=\\s*'([^']*)'\\s*$");
+	private static final Pattern KV_TRIPLE_OPEN = Pattern.compile("^\\s*([\\w.-]+)\\s*=\\s*\"\"\"(.*)$");
 
 	public static Map<String, String> parseTomlSection(File file, String section) {
-		Map<String, String> out = new HashMap<>();
-		boolean inSection = false;
-		String want = "[" + section + "]";
 		try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+			return parseTomlSection(reader, section);
+		} catch (IOException ignored) {
+			return new HashMap<>();
+		}
+	}
+
+	public static Map<String, String> parseTomlSection(String content, String section) {
+		return parseTomlSection(new BufferedReader(new java.io.StringReader(content != null ? content : "")), section);
+	}
+
+	public static Map<String, String> parseTomlSection(BufferedReader reader, String section) {
+		Map<String, String> out = new HashMap<>();
+		boolean inSection = section == null || section.isEmpty();
+		String want = section != null && !section.isEmpty() ? "[" + section + "]" : null;
+		try {
 			String line;
 			while ((line = reader.readLine()) != null) {
 				String trimmed = line.trim();
 				if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
 				if (trimmed.startsWith("[")) {
-					inSection = trimmed.equalsIgnoreCase(want);
+					if (want != null) {
+						inSection = trimmed.equalsIgnoreCase(want);
+					}
 					continue;
 				}
 				if (!inSection) continue;

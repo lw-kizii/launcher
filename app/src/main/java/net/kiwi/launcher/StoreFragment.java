@@ -36,9 +36,7 @@ import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -52,7 +50,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.zip.GZIPInputStream;
 
 public class StoreFragment extends Fragment {
 
@@ -69,7 +66,7 @@ public class StoreFragment extends Fragment {
 	private OnBackPressedCallback backCallback;
 
 	static class StoreEntry {
-		String id, name, description, longDescription, version, downloadUrl, iconUrl;
+		String id, name, author, description, longDescription, version, downloadUrl, iconUrl;
 		int downloads = -1;
 		boolean installing;
 		ItemStoreModBinding binding;
@@ -211,20 +208,13 @@ public class StoreFragment extends Fragment {
 		return map;
 	}
 
-	private static String firstNonEmpty(String... values) {
-		if (values == null) return "";
-		for (String v : values) {
-			if (v != null && !v.isEmpty() && !"null".equals(v)) return v;
-		}
-		return "";
-	}
-
 	private void applyFilter(String q) {
 		final List<StoreEntry> next = new ArrayList<>();
 		String needle = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
 		for (StoreEntry e : all) {
 			if (needle.isEmpty()
 				|| (e.name != null && e.name.toLowerCase(Locale.ROOT).contains(needle))
+				|| (e.author != null && e.author.toLowerCase(Locale.ROOT).contains(needle))
 				|| (e.description != null && e.description.toLowerCase(Locale.ROOT).contains(needle))
 				|| (e.id != null && e.id.toLowerCase(Locale.ROOT).contains(needle))) {
 				next.add(e);
@@ -243,6 +233,7 @@ public class StoreFragment extends Fragment {
 			public boolean areContentsTheSame(int o, int n) {
 				StoreEntry a = filtered.get(o), b = next.get(n);
 				return Objects.equals(a.name, b.name)
+					&& Objects.equals(a.author, b.author)
 					&& Objects.equals(a.description, b.description)
 					&& Objects.equals(a.iconUrl, b.iconUrl)
 					&& Objects.equals(a.downloadUrl, b.downloadUrl)
@@ -260,6 +251,12 @@ public class StoreFragment extends Fragment {
 		if (binding == null || getContext() == null) return;
 		openEntry = entry;
 		binding.detailName.setText(entry.name != null ? entry.name : entry.id);
+		if (entry.author != null && !entry.author.trim().isEmpty()) {
+			binding.detailAuthor.setText("by " + entry.author.trim());
+			binding.detailAuthor.setVisibility(View.VISIBLE);
+		} else {
+			binding.detailAuthor.setVisibility(View.GONE);
+		}
 		binding.detailVersion.setText(entry.version != null && !entry.version.isEmpty() ? "v" + entry.version : "");
 		binding.detailIcon.setImageResource(R.drawable.ic_store);
 		loadIcon(entry.iconUrl, bmp -> { if (bmp != null) binding.detailIcon.setImageBitmap(bmp); });
@@ -461,90 +458,17 @@ public class StoreFragment extends Fragment {
 	private static StoreEntry parseToml(String content) {
 		StoreEntry e = new StoreEntry();
 		if (content == null || content.isEmpty()) return e;
-		String[] lines = content.split("\r?\n");
-		String key = null;
-		StringBuilder multiline = null;
-		boolean inMultiline = false;
-		String quoteSymbol = null;
-
-		for (String line : lines) {
-			String trimmed = line.trim();
-			if (!inMultiline && (trimmed.isEmpty() || trimmed.startsWith("#"))) continue;
-
-			if (inMultiline) {
-				if (quoteSymbol != null && line.contains(quoteSymbol)) {
-					int endIdx = line.indexOf(quoteSymbol);
-					if (endIdx >= 0) multiline.append(line, 0, endIdx);
-					setField(e, key, multiline.toString().trim());
-					inMultiline = false;
-					multiline = null;
-					key = null;
-					quoteSymbol = null;
-				} else {
-					multiline.append(line).append("\n");
-				}
-				continue;
-			}
-
-			int eq = line.indexOf('=');
-			if (eq <= 0) continue;
-
-			key = line.substring(0, eq).trim();
-			String val = line.substring(eq + 1).trim();
-
-			if (!val.startsWith("\"\"\"") && !val.startsWith("'''")) {
-				int hashIdx = val.indexOf('#');
-				if (hashIdx >= 0) {
-					boolean inQ = false;
-					for (int i = 0; i < hashIdx; i++) {
-						if (val.charAt(i) == '"' || val.charAt(i) == '\'') inQ = !inQ;
-					}
-					if (!inQ) val = val.substring(0, hashIdx).trim();
-				}
-			}
-
-			if (val.startsWith("\"\"\"") || val.startsWith("'''")) {
-				quoteSymbol = val.startsWith("\"\"\"") ? "\"\"\"" : "'''";
-				val = val.substring(3);
-				if (val.contains(quoteSymbol)) {
-					int endIdx = val.indexOf(quoteSymbol);
-					val = val.substring(0, endIdx);
-					setField(e, key, val.trim());
-					key = null;
-					quoteSymbol = null;
-				} else {
-					inMultiline = true;
-					multiline = new StringBuilder(val).append("\n");
-				}
-			} else {
-				if (val.startsWith("\"") && val.endsWith("\"") && val.length() >= 2) {
-					val = val.substring(1, val.length() - 1);
-				} else if (val.startsWith("'") && val.endsWith("'") && val.length() >= 2) {
-					val = val.substring(1, val.length() - 1);
-				}
-				setField(e, key, unescapeString(val));
-				key = null;
-			}
-		}
+		Map<String, String> map = Util.parseTomlSection(content, "");
+		if (map.isEmpty()) map = Util.parseTomlSection(content, "mod");
+		e.id = map.get("id");
+		e.name = map.get("name");
+		e.author = map.containsKey("author") ? map.get("author") : map.get("authors");
+		e.description = map.get("description");
+		e.longDescription = map.containsKey("longDescription") ? map.get("longDescription") : map.get("long_description");
+		e.version = map.get("version");
+		e.downloadUrl = map.containsKey("downloadUrl") ? map.get("downloadUrl") : (map.containsKey("download") ? map.get("download") : map.get("url"));
+		e.iconUrl = map.containsKey("iconUrl") ? map.get("iconUrl") : (map.containsKey("icon") ? map.get("icon") : map.get("icon_url"));
 		return e;
-	}
-
-	private static void setField(StoreEntry e, String key, String val) {
-		if (e == null || key == null || val == null) return;
-		switch (key) {
-			case "id": e.id = val; break;
-			case "name": e.name = val; break;
-			case "description": e.description = val; break;
-			case "longDescription": case "long_description": e.longDescription = val; break;
-			case "version": e.version = val; break;
-			case "downloadUrl": case "download": case "url": e.downloadUrl = val; break;
-			case "iconUrl": case "icon": case "icon_url": e.iconUrl = val; break;
-		}
-	}
-
-	private static String unescapeString(String s) {
-		if (s == null) return "";
-		return s.replace("\\\"", "\"").replace("\\\\", "\\").replace("\\n", "\n").replace("\\t", "\t");
 	}
 
 	private void downloadTo(String urlStr, File dest, ProgressCallback cb) throws Exception {
@@ -590,6 +514,12 @@ public class StoreFragment extends Fragment {
 			StoreEntry e = filtered.get(position);
 			e.binding = h.b;
 			h.b.name.setText(e.name);
+			if (e.author != null && !e.author.trim().isEmpty()) {
+				h.b.author.setText("by " + e.author.trim());
+				h.b.author.setVisibility(View.VISIBLE);
+			} else {
+				h.b.author.setVisibility(View.GONE);
+			}
 			h.b.desc.setText(e.description != null ? e.description : "");
 			if (e.downloads >= 0) h.b.downloads.setText(StoreFragment.formatCount(e.downloads));
 			else h.b.downloads.setText("0");
